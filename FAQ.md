@@ -1,0 +1,108 @@
+# Frequently Asked Questions
+
+> Submissions are not open yet. This page describes the current design; the base
+> image and submission client will be published in this repository before
+> submissions open.
+
+## Compute and the 5 ms budget
+
+**What CPU and memory does my model container get? Is the 5 ms measured inside
+the container?**
+
+- **2 dedicated CPU cores** and **2 GB RAM** (swap disabled), **CPU-only** (no
+  GPU).
+- The container runs in a locked-down sandbox: **no network** at inference, a
+  **read-only** filesystem, all Linux capabilities dropped, a small in-memory
+  `/tmp`, and a hardened container runtime.
+- The **5 ms budget is measured inside the container, around your
+  `predict_percentiles` call only.** Transport and scheduling overhead are
+  measured separately and are **not** charged to you.
+
+So when you benchmark, time your own compute around the prediction call — that is
+exactly what is enforced. Because absolute timings vary by hardware, pin your
+benchmark to **2 cores / 2 GB** to approximate the evaluation environment, and
+watch algorithmic cost (allocations, vectorization) rather than only wall-clock
+on your dev machine.
+
+## Base image and entrypoint
+
+**Which base image and entrypoint do I use? Is there a warm-up allowance before
+the first call?**
+
+- You build **`FROM` a Synth-provided base image** — Python 3.12 (slim) carrying
+  the serving loop, with `numpy` and `msgpack` available. Synth will **publish this
+  base image in this repository before submissions open.** You copy your model
+  package into the image and point an environment variable
+  (`VHFT_MINER_ENTRYPOINT`) at your module.
+- Your entrypoint is an importable `package.module` (or `package.module:function`)
+  exposing:
+
+  ```python
+  def predict_percentiles(payload: dict) -> np.ndarray:  # shape (100,), float64
+      ...
+  ```
+
+  The result must be **100 finite, positive, non-decreasing** values — the
+  percentile grid described in the specification.
+- **Warm-up:** your model is loaded **once at container start**. The runtime
+  **imports your entrypoint before it starts accepting prompts**, so import and
+  model-load time are **never** counted against the 5 ms budget. In addition, you
+  receive **one warm-up prediction that is discarded** — not scored, not timed —
+  so numpy/allocation warm-up does not land on your first scored prompt.
+
+Practical implication: do all heavy setup (loading weights, allocating buffers,
+priming any lazy code paths) at **import / module load**, and keep
+`predict_percentiles` itself lean.
+
+## Submitting and updating a model
+
+**How are images submitted, how many resubmissions are allowed, and how fast does
+a new version go live?**
+
+- **Flow:** build your image `FROM` the base → **push it to the dedicated registry
+  repository Synth provisions for your hotkey** → take the image **digest**
+  (`sha256:…`) → **sign** a small submission envelope with your **subnet hotkey** →
+  **POST** it to the submission API. You submit a reference to a **pre-pushed image
+  (by digest)**; Synth does not build the image for you. Synth grants you push
+  access to that repository at onboarding — it is **private, not public** — and
+  Synth's evaluation runtime is granted read access to pull your image.
+- The signed envelope binds `{image_uri, image_digest, version}` to your hotkey
+  and a timestamp, so only the holder of the hotkey can submit on its behalf. You
+  poll a signed status endpoint to see when it is accepted and approved.
+- After submission, Synth runs a **security review** and approves the version.
+  Once approved, it goes **live within about 2 minutes** (one reconcile cycle),
+  provided your hotkey holds a registered slot on the Synth subnet.
+
+**Limits and rules:**
+
+- your hotkey must be **registered on the Synth subnet** and on the participant
+  **allow-list**;
+- **one submission per hotkey every 4 hours**;
+- each new submission must be **strictly newer** (by timestamp) than your previous
+  one;
+- submit **by digest** (`sha256:` + 64 hex characters), with a non-empty image
+  reference and `version ≥ 1`.
+
+There is no cap on how many versions you ship over time — you are bounded only by
+the 4-hour cadence and the strictly-newer rule.
+
+## Payload semantics at a trade-triggered call
+
+**At a trade-triggered call, does `book_ticker` already reflect that trade, and
+what is `current_time_ms` relative to the triggering event?**
+
+- **`current_time_ms`** is the **local receive timestamp (ms) of the triggering
+  event** — for a trade trigger, the instant that trade message was received; for
+  an interval trigger, the wall-clock boundary. Your forecast target is
+  `current_time_ms + 10 s`, and **every window in the payload is relative to
+  `current_time_ms`.**
+- The **triggering trade is included** in the payload's trades array
+  (`venues.spot.trades`) — it is recorded before the call is triggered, so a
+  trade-triggered call always contains its own trade.
+- **`book_ticker` is a separate best-bid/ask stream** and does **not** contain the
+  trade itself. Whether it already reflects that trade's price impact is
+  **timing-dependent**: the payload includes the best-bid/ask updates received up
+  to the moment it is assembled, but a fresh **post-trade** book-ticker tick is
+  **not guaranteed** to be present at a trade-triggered call. Treat `trades` as
+  the authoritative signal that the trade happened, and `book_ticker` as the
+  best-bid/ask state as of the call.
