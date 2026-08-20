@@ -95,6 +95,27 @@ a new version go live?**
 There is no cap on how many versions you ship over time — you are bounded only by
 the 4-hour cadence and the strictly-newer rule.
 
+**Submitting with the client.** Use [`client/submit.py`](client/submit.py) — it
+signs the envelope with your hotkey and posts it (no install needed via `uv`):
+
+```bash
+# push your image to the registry repo Synth gave you at onboarding, then take
+# the digest that `docker push` printed:
+docker push <your-registry-repo>/miner:v1
+
+uv run --no-project --with "bittensor>=11,<12" python client/submit.py submit \
+  --wallet my_coldkey --hotkey my_hotkey \
+  --image-uri <your-registry-repo>/miner \
+  --image-digest sha256:<digest-from-docker-push> --version 1
+
+# check status any time (signature-gated):
+uv run --no-project --with "bittensor>=11,<12" python client/submit.py status \
+  --wallet my_coldkey --hotkey my_hotkey
+```
+
+Your `<your-registry-repo>` URL, push credentials, and `docker login` command are
+provided by Synth at onboarding.
+
 ## Payload semantics at a trade-triggered call
 
 **At a trade-triggered call, does `book_ticker` already reflect that trade, and
