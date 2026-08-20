@@ -6,23 +6,19 @@
 
 ## Compute and the 5 ms budget
 
-**What CPU and memory does my model container get? Is the 5 ms measured inside
-the container?**
+**What is actually enforced, and how should I size my model?**
 
-- **2 dedicated CPU cores** and **2 GB RAM** (swap disabled), **CPU-only** (no
-  GPU).
-- The container runs in a locked-down sandbox: **no network** at inference, a
-  **read-only** filesystem, all Linux capabilities dropped, a small in-memory
-  `/tmp`, and a hardened container runtime.
-- The **5 ms budget is measured inside the container, around your
-  `predict_percentiles` call only.** Transport and scheduling overhead are
-  measured separately and are **not** charged to you.
-
-So when you benchmark, time your own compute around the prediction call — that is
-exactly what is enforced. Because absolute timings vary by hardware, pin your
-benchmark to **2 cores / 2 GB** to approximate the evaluation environment, and
-watch algorithmic cost (allocations, vectorization) rather than only wall-clock
-on your dev machine.
+- The hard limit is **< 5 ms per call**, **measured inside the container around
+  your `predict_percentiles` call only** — transport and scheduling are measured
+  separately and are **not** charged to you.
+- **CPU-only** (no GPU) and **no network** at inference, in a locked-down sandbox:
+  read-only filesystem, all Linux capabilities dropped, a small in-memory `/tmp`.
+  The payload is your only input.
+- **Sizing:** benchmark conservatively against a **single CPU core** and a couple
+  of GB of RAM. Design to that floor and you'll fit — the evaluation environment
+  may give you more, never less. Because absolute timings vary by hardware, track
+  algorithmic cost (allocations, vectorization) rather than only wall-clock on
+  your dev machine.
 
 ## Base image and entrypoint
 
