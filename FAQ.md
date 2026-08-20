@@ -1,8 +1,8 @@
 # Frequently Asked Questions
 
-> Submissions are not open yet. This page describes the current design; the base
-> image and submission client will be published in this repository before
-> submissions open.
+> Submissions are not open yet. This page describes the current design; the
+> submission client and the exact pinned base-image digest will be published
+> before submissions open.
 
 ## Compute and the 5 ms budget
 
@@ -29,11 +29,20 @@ on your dev machine.
 **Which base image and entrypoint do I use? Is there a warm-up allowance before
 the first call?**
 
-- You build **`FROM` a Synth-provided base image** — Python 3.12 (slim) carrying
-  the serving loop, with `numpy` and `msgpack` available. Synth will **publish this
-  base image in this repository before submissions open.** You copy your model
-  package into the image and point an environment variable
-  (`VHFT_MINER_ENTRYPOINT`) at your module.
+- You build **`FROM` the Synth Ultra base image**, published on GitHub Container
+  Registry (free, anonymous pull) at
+  **`ghcr.io/synthdataco/vhft-miner-base`** — Python 3.12 (slim) carrying the
+  serving loop, with `numpy` and `msgpack` available. **Pin it by digest** for a
+  reproducible build and target **`linux/amd64`** (the evaluation platform); copy
+  your model package in and set `VHFT_MINER_ENTRYPOINT` to your module:
+
+  ```dockerfile
+  FROM ghcr.io/synthdataco/vhft-miner-base:v1   # stable, frozen tag for this round
+  # for a fully reproducible build, pin the digest instead:
+  # FROM ghcr.io/synthdataco/vhft-miner-base@sha256:47e3a095ae495dec695bc69ba613725e9e83fc7855bf97e7a3f35179a5e1c25d
+  COPY my_model/ /app/my_model/
+  ENV VHFT_MINER_ENTRYPOINT=my_model.model
+  ```
 - Your entrypoint is an importable `package.module` (or `package.module:function`)
   exposing:
 

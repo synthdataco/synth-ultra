@@ -81,16 +81,12 @@ time and are visible to all participants. Lower average CRPS ranks higher.
 
 ## Submission
 
-> The submission pipeline is being finalized; this section is indicative and may
-> change before submissions open.
+> Submissions are not open yet; the base image and submission client will be
+> published before they open. See the [FAQ](FAQ.md) for the current details.
 
-A submission is one of:
-
-- a **Docker image** that exposes the model behind the `predict_percentiles`
-  interface, or
-- a **source archive with a `Dockerfile`** that Synth builds into that image.
-
-The image must build and run under the environment constraints above (CPU-only,
-no network at inference, deterministic, under the 5 ms budget). The base image,
-the exact entrypoint contract, and how images are submitted and validated will be
-published in this repository before submissions open.
+You submit a **Docker image** that exposes the model behind the
+`predict_percentiles` interface, built `FROM` a Synth-provided base image. You
+push the image to a per-hotkey registry repository Synth provisions for you and
+submit a **signed reference to it by digest** — Synth runs the image as-is and
+does not build it for you. It must run under the environment constraints above
+(CPU-only, no network at inference, deterministic, under the 5 ms budget).
