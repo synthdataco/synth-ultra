@@ -112,6 +112,22 @@ uv run --no-project --with "bittensor>=11,<12" python client/submit.py status \
 Your `<your-registry-repo>` URL, push credentials, and `docker login` command are
 provided by Synth at onboarding.
 
+**Reading your status.** The `status` command tells you both whether we accepted
+your image and whether it's actually running:
+
+- **`status`** — your latest submission: `pending` (awaiting review), `approved`,
+  or `rejected` (reason in `error`).
+- **`deploy_state`** — *why* it is or isn't live:
+  - `live` — deployed and scoring;
+  - `queued` — approved, waiting for a free slot;
+  - `not_registered` — approved, but your hotkey isn't registered on the Synth
+    subnet; register it and you'll deploy automatically;
+  - `pending_review` / `rejected` — mirrors the submission status.
+- **`live_digest`** — the image digest actually running for you (set only when `live`).
+
+So `approved` + `not_registered` means we accepted your image, but you still need a
+**registered subnet hotkey** before it can run.
+
 ## Payload semantics at a trade-triggered call
 
 **At a trade-triggered call, does `book_ticker` already reflect that trade, and
