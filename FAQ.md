@@ -33,12 +33,20 @@ the first call?**
   your model package in and set `VHFT_MINER_ENTRYPOINT` to your module:
 
   ```dockerfile
-  FROM ghcr.io/synthdataco/vhft-miner-base:v1   # stable, frozen tag for this round
+  FROM ghcr.io/synthdataco/vhft-miner-base:v2   # stable, frozen tag for this round
   # for a fully reproducible build, pin the digest instead:
-  # FROM ghcr.io/synthdataco/vhft-miner-base@sha256:47e3a095ae495dec695bc69ba613725e9e83fc7855bf97e7a3f35179a5e1c25d
+  # FROM ghcr.io/synthdataco/vhft-miner-base@sha256:66dbeb6f64cab66383333b1499b0fe45a186e5d7bf2f1ade2ddacc3342e1d6ca
   COPY my_model/ /app/my_model/
   ENV VHFT_MINER_ENTRYPOINT=my_model.model
   ```
+
+  **Rebuild on `v2` if your image was built on `v1`.** Both tags stay published and
+  `v1` still runs, but its serving loop treats a dropped connection as fatal: when a
+  round-trip overruns the kill timeout the orchestrator closes the socket, and a `v1`
+  miner exits and is restarted instead of simply waiting for the reconnect. Every
+  restart is a cold start during which your miner answers nothing. `v2` keeps
+  listening. Nothing else changed — same Python, same `numpy`/`msgpack`, same
+  interface — so a rebuild is the only action needed.
 - Your entrypoint is an importable `package.module` (or `package.module:function`)
   exposing:
 
