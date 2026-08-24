@@ -40,13 +40,10 @@ the first call?**
   ENV VHFT_MINER_ENTRYPOINT=my_model.model
   ```
 
-  **Rebuild on `v2` if your image was built on `v1`.** Both tags stay published and
-  `v1` still runs, but its serving loop treats a dropped connection as fatal: when a
-  round-trip overruns the kill timeout the orchestrator closes the socket, and a `v1`
-  miner exits and is restarted instead of simply waiting for the reconnect. Every
-  restart is a cold start during which your miner answers nothing. `v2` keeps
-  listening. Nothing else changed — same Python, same `numpy`/`msgpack`, same
-  interface — so a rebuild is the only action needed.
+  `v2` is current, and `v2`'s serving loop recovers from a dropped connection by
+  waiting for the reconnect. `v1` remains published and works; if you built on it,
+  rebuilding on `v2` is worth doing whenever convenient. Nothing else changed — same
+  Python, same `numpy`/`msgpack`, same interface — so a rebuild is the only step.
 - Your entrypoint is an importable `package.module` (or `package.module:function`)
   exposing:
 
