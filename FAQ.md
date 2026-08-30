@@ -64,6 +64,24 @@ Practical implication: do all heavy setup (loading weights, allocating buffers,
 priming any lazy code paths) at **import / module load**, and keep
 `predict_percentiles` itself lean.
 
+## Joining
+
+**How do I get in?** Apply with a signed request from your subnet 50 hotkey — see
+[`ONBOARDING.md`](ONBOARDING.md). Your hotkey is your identity; there is no form, no account
+and no email step. Your hotkey must already hold a registered uid on subnet 50, which is what
+bounds participation.
+
+**Is approval automatic?** No. A human reviews every application. Nothing is created for you
+until then, and a limited number of participants are set up per day.
+
+**Where does my registry repo come from?** It is created for you on approval, along with a
+push service account and a key you collect yourself. That key grants push to your own repo
+only — no access to the evaluation machine or to anyone else's repo.
+
+**I lost my push key.** You get two retrievals in total, so check whether you have one left
+(`client/submit.py credentials`). The second exists so a dropped download does not cost you
+the key — it is not a spare. If both are used, ask Synth to re-issue.
+
 ## Submitting and updating a model
 
 **How are images submitted, how many resubmissions are allowed, and how fast does
@@ -100,7 +118,7 @@ the 4-hour cadence and the strictly-newer rule.
 signs the envelope with your hotkey and posts it (no install needed via `uv`):
 
 ```bash
-# push your image to the registry repo Synth gave you at onboarding, then take
+# push to the registry repo you collected in ONBOARDING.md step 3, then take
 # the digest that `docker push` printed:
 docker push <your-registry-repo>/miner:v1
 
