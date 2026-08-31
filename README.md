@@ -39,8 +39,11 @@ Full schema: [`input.md`](input.md). Full competition spec:
 ## Rewards & participation
 
 - **25%** of total subnet miner rewards are allocated to Synth Ultra.
-- Initially limited to **10 participants**. All participants must be onboarded and
-  complete the participation form before submitting a model.
+- Limited to **30 participants**.
+- **To join, ask us to register your hotkey** — see [`ONBOARDING.md`](ONBOARDING.md). You send a
+  hotkey and a handle, we create your registry repo and push key, and you collect the key
+  yourself over a signed request — we never email you a credential.
+- Your hotkey must already hold a **registered uid on subnet 50** before we can register you.
 
 ## Objective
 
