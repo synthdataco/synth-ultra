@@ -40,10 +40,10 @@ Full schema: [`input.md`](input.md). Full competition spec:
 
 - **25%** of total subnet miner rewards are allocated to Synth Ultra.
 - Limited to **30 participants**.
-- **Joining is self-service** — see [`ONBOARDING.md`](ONBOARDING.md). You apply with a
-  signed request from your subnet 50 hotkey, we approve it, and your registry repo and
-  push key are created for you. There is no form and no email round-trip.
-- Your hotkey must already hold a **registered uid on subnet 50** before you apply.
+- **To join, ask us to register your hotkey** — see [`ONBOARDING.md`](ONBOARDING.md). You send a
+  hotkey and a handle, we create your registry repo and push key, and you collect the key
+  yourself over a signed request — we never email you a credential.
+- Your hotkey must already hold a **registered uid on subnet 50** before we can register you.
 
 ## Objective
 

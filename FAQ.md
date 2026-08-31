@@ -66,13 +66,13 @@ priming any lazy code paths) at **import / module load**, and keep
 
 ## Joining
 
-**How do I get in?** Apply with a signed request from your subnet 50 hotkey — see
-[`ONBOARDING.md`](ONBOARDING.md). Your hotkey is your identity; there is no form, no account
-and no email step. Your hotkey must already hold a registered uid on subnet 50, which is what
-bounds participation.
+**How do I get in?** Ask Synth to register you — send your subnet 50 hotkey, a short handle
+and an email. See [`ONBOARDING.md`](ONBOARDING.md). Your hotkey is your identity; there is no
+form and no account. It must already hold a registered uid on subnet 50, which is what bounds
+participation.
 
-**Is approval automatic?** No. A human reviews every application. Nothing is created for you
-until then, and a limited number of participants are set up per day.
+**Is registration automatic?** No. We set participants up by hand, a limited number per day,
+in the order requests arrive. Nothing is created for you until then.
 
 **Where does my registry repo come from?** It is created for you on approval, along with a
 push service account and a key you collect yourself. That key grants push to your own repo
@@ -118,7 +118,7 @@ the 4-hour cadence and the strictly-newer rule.
 signs the envelope with your hotkey and posts it (no install needed via `uv`):
 
 ```bash
-# push to the registry repo you collected in ONBOARDING.md step 3, then take
+# push to the registry repo you collected in ONBOARDING.md step 2, then take
 # the digest that `docker push` printed:
 docker push <your-registry-repo>/miner:v1
 

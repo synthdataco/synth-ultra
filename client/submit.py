@@ -16,11 +16,10 @@ You need `bittensor` available. The simplest way, with no install, is uv.
 
 THE ORDER, once end to end:
 
-  # 1. apply. Your hotkey must already hold a registered uid on subnet 50.
-  uv run --no-project --with "bittensor>=11,<12" python submit.py apply \
-    --wallet my_coldkey --hotkey my_hotkey --handle acme --email me@example.com
+  # 1. ask Synth to register your hotkey (see ONBOARDING.md). The `apply` command
+  #    exists for a future self-service round and currently answers 503.
 
-  # 2. wait for a human to approve you, then collect your push key. This writes
+  # 2. once we tell you that you are set up, collect your push key. This writes
   #    the key to a file and prints the docker login line. You get TWO retrievals
   #    in total, so keep the file.
   uv run --no-project --with "bittensor>=11,<12" python submit.py credentials \

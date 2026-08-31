@@ -12,42 +12,20 @@ nothing to install, is `uv`.
 
 ---
 
-## 1. Apply
+## 1. Ask us to register you
 
-```bash
-uv run --no-project --with "bittensor>=11,<12" python client/submit.py apply \
-  --wallet my_coldkey --hotkey my_hotkey \
-  --handle acme --email me@example.com
-```
+Send Synth your **subnet 50 hotkey**, a short handle (`[a-z0-9-]`, up to 20 characters — it
+becomes the name of your registry repo) and an email we can reach you on.
 
-Every contact field is optional, but give us at least one — otherwise we can only identify you
-by your hotkey. `--handle` also becomes the name of your registry repo, so pick something
-short and readable (`[a-z0-9-]`, up to 20 characters).
+Your hotkey must already hold a registered uid on subnet 50. That is what bounds
+participation, so register it first if you have not.
 
-A `202` means your application is recorded. **It does not mean you are in** — a human reviews
-every application before anything is created.
+We create your registry repo, a push service account and a push key for you. A limited number
+of participants are set up per day, in the order requests arrive.
 
-Re-running `apply` updates your contact details. It never creates a second entry, so it is
-safe to correct a typo.
+You will hear from us when it is ready — then come back for step 2.
 
-If you get a `403`, your hotkey holds no registered uid on subnet 50. Register it, then apply
-again.
-
-## 2. Wait for approval
-
-Approval is manual and deliberately so. Once approved, your registry repo, a push service
-account and a push key are created for you automatically — usually within a couple of minutes,
-though a limited number of participants are set up per day.
-
-You can poll step 3 at any time; it will tell you where you are:
-
-| response | meaning |
-| --- | --- |
-| `pending_review` | applied, waiting on a human |
-| `provisioning` | approved, being set up — check back shortly |
-| `provisioned` | ready, and the key is in the response |
-
-## 3. Collect your push key
+## 2. Collect your push key
 
 ```bash
 uv run --no-project --with "bittensor>=11,<12" python client/submit.py credentials \
@@ -70,7 +48,7 @@ cat vhft-push-<your-handle>.json \
 That key grants push to **your own repo and nothing else**. It gives no access to the
 evaluation machine or to any other participant.
 
-## 4. Build, push, submit
+## 3. Build, push, submit
 
 Build for **`linux/amd64`** — the evaluation host is amd64, and an arm64 image built on an
 Apple Silicon machine will not run:
@@ -104,7 +82,7 @@ uv run --no-project --with "bittensor>=11,<12" python client/submit.py status \
 
 ## Updating your model later
 
-Repeat step 4 with a **higher `--version`**. You do not re-apply and you do not need a new
+Repeat step 3 with a **higher `--version`**. You do not need a new
 key. Submissions are rate-limited to one accepted submission per hotkey every 4 hours.
 
 ## What to build
