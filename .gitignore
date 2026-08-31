@@ -2,3 +2,8 @@
 *.swp
 __pycache__/
 *.pyc
+
+# Your push key. `client/submit.py credentials` writes it here, and the commands in
+# ONBOARDING.md are run from this directory — so without this line a Google service-account
+# private key sits untracked in a git clone, one `git add -A` away from being published.
+vhft-push-*.json
