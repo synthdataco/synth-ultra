@@ -34,7 +34,9 @@ futures** (BTCUSDT):
 - **60 s** of book-ticker updates (best bid/ask price and size).
 
 Full schema: [`input.md`](input.md). Full competition spec:
-[`SPECIFICATION.md`](SPECIFICATION.md).
+[`SPECIFICATION.md`](SPECIFICATION.md). Answers to the questions participants
+actually ask — the latency budget, call rate, the compute environment:
+[`FAQ.md`](FAQ.md).
 
 ## Rewards & participation
 
