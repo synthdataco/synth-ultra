@@ -36,8 +36,12 @@ the model's only input.
 
 The model runs inside Synth's evaluation environment, under these constraints:
 
-- **Latency** — under **5 ms** per call, strictly enforced. A prediction that
-  exceeds the budget does not count.
+- **Latency** — the target is under **5 ms** per call. It is **not enforced yet**:
+  the threshold in force today is a **1-second timeout** on the round trip, and a
+  response slower than 5 ms is currently scored like any other. We will reduce the
+  threshold toward 5 ms progressively, so build to 5 ms — see
+  [the FAQ](FAQ.md#the-latency-budget-what-is-enforced-today) for what happens when
+  a call exceeds the threshold.
 - **No network access** during inference — the payload is the only input.
 - **Deterministic** — the same payload must produce the same output.
 - **Isolated and resource-limited** — the model runs in a sandboxed container with

@@ -8,9 +8,11 @@
 
 **What is actually enforced, and how should I size my model?**
 
-- The hard limit is **< 5 ms per call**, **measured inside the container around
-  your `predict_percentiles` call only** — transport and scheduling are measured
-  separately and are **not** charged to you.
+- The target is **< 5 ms per call**, **measured inside the container around your
+  `predict_percentiles` call only** — transport and scheduling are measured
+  separately and are **not** charged to you. It is **not enforced yet**; see
+  [the latency budget](#the-latency-budget-what-is-enforced-today) for what is in
+  force today and where it is heading.
 - **CPU-only** (no GPU) and **no network** at inference, in a locked-down sandbox:
   read-only filesystem, all Linux capabilities dropped, a small in-memory `/tmp`.
   The payload is your only input.
@@ -151,23 +153,110 @@ your image and whether it's actually running:
 So `approved` + `not_registered` means we accepted your image, but you still need a
 **registered subnet hotkey** before it can run.
 
-## Payload semantics at a trade-triggered call
+## The latency budget: what is enforced today
 
-**At a trade-triggered call, does `book_ticker` already reflect that trade, and
+**Is the 5 ms budget enforced, and what happens if I exceed it?**
+
+- **Not yet.** The threshold in force is a **1-second timeout on the round trip**
+  (as of 2026-09-21). A response slower than 5 ms is currently scored like any
+  other, and the competition standings reflect that. This line is updated as the
+  threshold moves — check it rather than assuming.
+- **It is going to tighten.** We will reduce the threshold toward **5 ms
+  progressively**, so build to 5 ms — it is the target the competition is designed
+  around, and the reduction will be gradual rather than a cliff.
+- **If a call exceeds the threshold** the round trip is abandoned, the connection
+  is re-established, and that prompt counts as a non-answer for you.
+
+**How is a non-answer scored?**
+
+A non-answer is not dropped — it is charged the **95th percentile of the CRPS
+scored by the models that did answer that prompt**. Each prompt's best score is
+then subtracted, so the prompt's winner scores 0 and everyone is measured against
+the field.
+
+The effect is that a miss costs you rather than shortening your series: every
+model is averaged over the *same* prompts. Output that fails validation — wrong
+shape or dtype, non-finite, non-positive, or not non-decreasing — is treated the
+same as a non-answer.
+
+## How often am I called, and why
+
+**How many prompts per hour, and what triggers them?**
+
+- Roughly **4.5–5 calls per minute** — about **270–300 per hour**. Every
+  participant receives every prompt; there is no per-model sampling.
+- Mix, on a recent sample: about **two thirds clock-driven** (`time`) and **one
+  third triggered by a real price move** (`event` / `event_delayed`). Roughly half
+  the move-triggered calls are issued after a **random delay of up to 500 ms**
+  rather than at the instant of the move, so a model cannot assume its data is
+  perfectly fresh.
+- A move qualifies when a trade group shifts the price by **more than one tick**,
+  measured against the previous group. Trades sharing an exchange timestamp are
+  grouped first, so one order sweeping several levels counts once, as one move.
+
+See [`input.md`](input.md) for the `prompt.trigger` field.
+
+## Feed completeness
+
+**Are book-ticker updates coalesced or sampled?**
+
+No. **Every update we receive is in the payload** — the array is every tick in the
+trailing 60 s, in receive order, with nothing dropped or merged.
+
+Size your parsing for the busy end: spot book-ticker runs from a few hundred
+messages per second when quiet into the low thousands when active, so a 60 s
+window is on the order of **10k–60k entries**, and futures is heavier still. A
+model that is fast on a quiet window can miss the budget on a busy one.
+
+## Compute environment
+
+**What does my container actually run on?**
+
+- **CPU only**, no GPU. Your container gets a **pinned set of 2 cores** — a real
+  CPU set, not a scheduler quota — and a couple of GB of RAM.
+- The **host is shared** with other participants' containers. They cannot observe
+  or affect your model, but they do share the machine.
+- Models run inside a **gVisor sandbox**, which services syscalls in userspace.
+  This is the single most common reason a model that is fast locally is slower
+  here: **pure computation runs close to native, but syscall-heavy work does not**
+  — file access, memory mapping, thread creation, and allocation churn that
+  reaches `brk`/`mmap` all cost far more than on a normal host.
+
+Practical advice: allocate buffers and load everything at **module import**, keep
+`predict_percentiles` free of allocation and I/O, and do not spawn threads. If you
+want to reproduce the environment locally, run your image under `runsc`.
+
+**Can I ship a compiled extension?**
+
+Yes. A C++ or Cython extension built during the Docker build, with source included
+in the image, is acceptable — and under the sandbox it often helps, since it
+removes interpreter overhead and syscalls.
+
+The constraints that do apply: build `FROM` the published base image, do not
+override the serving command, keep the image under 2 GB, target `linux/amd64`, no
+network at inference, and produce deterministic output.
+
+One trap worth stating: **compile for a conservative baseline instruction set.**
+If you build with `-march=native` on a machine newer than the evaluation host, you
+get an illegal-instruction crash on the first call rather than a slow model.
+
+## Payload semantics at an event-triggered call
+
+**At an event-triggered call, does `book_ticker` already reflect that trade, and
 what is `current_time_ms` relative to the triggering event?**
 
 - **`current_time_ms`** is the **local receive timestamp (ms) of the triggering
-  event** — for a trade trigger, the instant that trade message was received; for
-  an interval trigger, the wall-clock boundary. Your forecast target is
+  event** — for an `event` or `event_delayed` trigger, the instant the triggering
+  trade message was received; for a `time` trigger, the wall-clock boundary. Your forecast target is
   `current_time_ms + 10 s`, and **every window in the payload is relative to
   `current_time_ms`.**
 - The **triggering trade is included** in the payload's trades array
   (`venues.spot.trades`) — it is recorded before the call is triggered, so a
-  trade-triggered call always contains its own trade.
+  event-triggered call always contains its own trade.
 - **`book_ticker` is a separate best-bid/ask stream** and does **not** contain the
   trade itself. Whether it already reflects that trade's price impact is
   **timing-dependent**: the payload includes the best-bid/ask updates received up
   to the moment it is assembled, but a fresh **post-trade** book-ticker tick is
-  **not guaranteed** to be present at a trade-triggered call. Treat `trades` as
+  **not guaranteed** to be present at an event-triggered call. Treat `trades` as
   the authoritative signal that the trade happened, and `book_ticker` as the
   best-bid/ask state as of the call.

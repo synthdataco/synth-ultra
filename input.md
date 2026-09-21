@@ -15,7 +15,7 @@ for BTCUSDT, as a plain dict of NumPy arrays. Read this alongside
     "num_percentiles": 100,
     "quantile_grid": "centered-100",     # q_i = (2i-1)/200
     "current_time_ms": int,              # the "now" the forecast is anchored to (ms)
-    "trigger": {"kind": "interval"|"trade"|"book", "venue": str|None}
+    "trigger": {"kind": "time"|"event"|"event_delayed", "venue": str|None}
   },
   "venues": { "spot": VenueData, "futures": VenueData }
 }
@@ -40,6 +40,15 @@ oldest-first. Depth snapshots carry a set number of levels per side (20 in the
 initial competition).
 
 ## Field reference
+
+- **`prompt.trigger`** — why this call fired. `kind` is one of:
+  - **`time`** — a clock-driven call on a fixed interval boundary;
+  - **`event`** — fired by a trade that moved the price more than one tick,
+    `current_time_ms` being that trade's local receive time;
+  - **`event_delayed`** — the same, but issued after a short random delay
+    (up to 500 ms) after the move, so a model cannot assume its data is
+    perfectly fresh. `venue` names the venue that triggered it, or is `None`
+    for a `time` call.
 
 - **`candles_1s`** — 1-second OHLCV over the trailing hour. `open_time_ms[j]` is
   the candle's open time; `ohlcv[j] = [open, high, low, close, volume]`.
