@@ -186,15 +186,56 @@ same as a non-answer.
 - Roughly **4.5–5 calls per minute** — about **270–300 per hour**. Every
   participant receives every prompt; there is no per-model sampling.
 - Mix, on a recent sample: about **two thirds clock-driven** (`time`) and **one
-  third triggered by a real price move** (`event` / `event_delayed`). Roughly half
-  the move-triggered calls are issued after a **random delay of up to 500 ms**
-  rather than at the instant of the move, so a model cannot assume its data is
-  perfectly fresh.
-- A move qualifies when a trade group shifts the price by **more than one tick**,
-  measured against the previous group. Trades sharing an exchange timestamp are
-  grouped first, so one order sweeping several levels counts once, as one move.
+  third triggered by a real price move** (`event` / `event_delayed`).
 
-See [`input.md`](input.md) for the `prompt.trigger` field.
+**What is the clock interval, and is it aligned?**
+
+**20 seconds, aligned to wall-clock multiples** — `:00`, `:20`, `:40`. A `time` prompt
+fires on each boundary, and `current_time_ms` is that boundary.
+
+**I see far more qualifying price moves than event prompts. How is one chosen?**
+
+Neither a minimum gap nor random sampling — a **window**, and the **first** qualifying
+move inside it wins:
+
+```
+:00   time prompt fires
+:10   event window OPENS, 10 s after the boundary
+      · any move already queued from before the window is discarded as stale
+      · the first qualifying move from here on fires the event prompt
+:15   window CLOSES if nothing qualified — 5 s maximum wait
+:20   next boundary, and it starts again
+```
+
+So at most **one** event prompt per 20-second interval, and only from a 5-second slice of
+it. Every other qualifying move is ignored: those outside the window entirely, and any
+that arrive after the first one within it. That is why qualifying moves vastly outnumber
+event prompts.
+
+If no move qualifies inside those 5 seconds the window is **abandoned** and only the clock
+prompt fires for that interval — which is why the mix is about ⅔ time and ⅓ event rather
+than an even split. Quiet markets produce proportionally fewer event prompts.
+
+**What counts as a qualifying move?** A trade group that shifts the price by **more than
+one tick** against the previous group. Trades sharing an exchange timestamp are grouped
+first, so one order sweeping several levels counts once, as a single move rather than
+several one-tick steps.
+
+**Is the delay on `event_delayed` uniform between 0 and 500 ms?**
+
+Not quite, and the difference matters if you are modelling it. There is a **coin flip
+first**:
+
+- **50%** of move-triggered prompts fire with **zero delay** — these arrive as `event`;
+- **50%** are delayed by `uniform(0, 500 ms)` — these arrive as `event_delayed`.
+
+So across all move-triggered prompts the delay is a mixture, not a uniform: half the mass
+sits at exactly 0 ms, and the rest is spread evenly up to 500 ms. Median 0, mean ~125 ms.
+
+The delayed branch exists so a model cannot assume its data is perfectly fresh. The coin
+decides *when* you are asked, never *whether* — and `current_time_ms` stays the move's own
+receive time either way, so only the staleness of your inputs changes, not the question or
+the horizon it is scored over.
 
 ## Feed completeness
 
@@ -239,6 +280,45 @@ network at inference, and produce deterministic output.
 One trap worth stating: **compile for a conservative baseline instruction set.**
 If you build with `-march=native` on a machine newer than the evaluation host, you
 get an illegal-instruction crash on the first call rather than a slow model.
+
+## Testing before you submit
+
+**Is there a sample payload?**
+
+Yes — two, in [`samples/`](samples/). A 200 KB one for checking shape, and a full-size
+real capture (0.7 MB gzipped) for checking that your model still fits the budget at
+production row counts. Both are real captures from the same code path that builds live
+prompts.
+
+Run your model against them with [`client/validate.py`](client/validate.py), which calls
+your entrypoint the way the runtime does and checks the response contract. See
+[`input.md`](input.md#sample-payloads).
+
+## The two slow fields
+
+**Why do `liquidations` and `depth_bands` behave differently from everything else?**
+
+Every other field in the payload is a live stream, current to the tick. These two are not,
+and each is deliberately slow for its own reason.
+
+**`liquidations`** covers a **1-hour** window rather than the 60 s the other streams use.
+They are simply too sparse for a short one: about 0.7 per minute, with roughly 80% of any
+given 60 s window completely empty. Over an hour the field reads as a volatility-regime
+signal; over a minute it would be blank four prompts out of five.
+
+The trap is the side. **`is_buy` is the liquidation order's side, not the trapped
+position's** — `True` is the exchange buying to close a short, which pushes price *up*.
+
+**`depth_bands`** is refreshed every **~30 seconds** and is **anchored to an absolute
+price**, not to the current mid. Re-anchor it against the live top of book from
+`book_ticker`, and read its `recv_ts_ms` rather than assuming it is current.
+
+That combination is what makes a slow refresh workable: resting size in the book barely
+changes over 30 seconds when measured on a fixed price frame, even while the mid moves.
+A mid-relative view of the same book would be stale within seconds.
+
+Neither field replaces anything. `depth_start` / `depth_latest` are still live and still
+precise — they just cover about $20 either side, where the bands cover about $1,000.
 
 ## Payload semantics at an event-triggered call
 
