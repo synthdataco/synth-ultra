@@ -31,7 +31,10 @@ futures** (BTCUSDT):
 - an order-book snapshot to a set depth from ~**60 s** prior, every subsequent
   order-book update, and the latest snapshot,
 - **60 s** of aggregate trades, and
-- **60 s** of book-ticker updates (best bid/ask price and size).
+- **60 s** of book-ticker updates (best bid/ask price and size),
+- **1 h** of futures liquidations (forced position closures), and
+- a coarse **$10-band view of the whole spot book** (~$1,000 of reach), refreshed every
+  ~30 s alongside the live 20-level snapshot.
 
 Full schema: [`input.md`](input.md). Full competition spec:
 [`SPECIFICATION.md`](SPECIFICATION.md). Answers to the questions participants
