@@ -44,6 +44,47 @@ Both `spot` and `futures` are present with the identical shape — `liquidations
 you never have to check whether a key exists. Arrays are ordered oldest-first. Depth
 snapshots carry a set number of levels per side (20 in the initial competition).
 
+## Schema versions
+
+`schema_version` identifies the payload contract. It is currently **5**.
+
+**Treat it as a minimum, not an exact match.** Both bumps so far added keys alongside the
+existing ones — nothing was removed or renamed:
+
+| version | added | date |
+|---|---|---|
+| 5 | `venues.*.depth_bands` | 2026-09-25 |
+| 4 | `venues.*.liquidations` | 2026-09-25 |
+| 3 | the baseline documented here | — |
+
+A model that ignores keys it does not recognise rides these out. One that asserts
+`schema_version == 5` stops answering the moment the number moves — and because the container
+stays up and healthy, that failure looks like a scoring problem rather than a rejected prompt.
+If you check the version at all, prefer:
+
+```python
+if payload["schema_version"] < 5:        # the version you were built against
+    raise ValueError("payload older than this model supports")
+```
+
+**The version number is not the only thing that can move.** In August 2026 `prompt.trigger.kind`
+gained the values `time`, `event` and `event_delayed`, replacing an earlier set — and
+`schema_version` did **not** change, because no field was added or removed. So also avoid
+exhaustive matches on string values you read out of the payload:
+
+```python
+kind = payload["prompt"]["trigger"]["kind"]
+if kind == "time":
+    ...
+else:                                     # event, event_delayed, or anything added later
+    ...
+```
+
+A change that **removes or renames a field, or changes its type or meaning**, is breaking and
+will be announced before the deploy. Additive changes ship without notice, and the samples in
+[`samples/`](samples/) are regenerated alongside them — re-pull them if your local tests and
+production disagree.
+
 ## Field reference
 
 - **`prompt.trigger`** — why this call fired. `kind` is one of:
