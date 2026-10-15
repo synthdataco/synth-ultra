@@ -1,7 +1,7 @@
 # Synth Ultra — model input
 
 What your model receives on each prediction: a snapshot of Binance market data
-for BTCUSDT, as a plain dict of NumPy arrays. Read this alongside
+for the prompted asset, as a plain dict of NumPy arrays. Read this alongside
 [`SPECIFICATION.md`](SPECIFICATION.md) (the task and how the output is scored).
 
 ## Payload shape
@@ -10,7 +10,7 @@ for BTCUSDT, as a plain dict of NumPy arrays. Read this alongside
 {
   "schema_version": 5,
   "prompt": {
-    "asset": "BTC",
+    "asset": "BTC" | "ETH" | "SOL" | "XRP",
     "horizon_seconds": 10,
     "num_percentiles": 100,
     "quantile_grid": "centered-100",     # q_i = (2i-1)/200
@@ -38,6 +38,20 @@ VenueData = {
   "last_event_times": {stream_name: recv_ts_ms}
 }
 ```
+
+## Assets
+
+| `prompt.asset` | symbol (spot and futures) | tick size | `depth_bands.bucket_usd` |
+|---|---|---|---|
+| `BTC` | `BTCUSDT` | 0.01 | 10 |
+| `ETH` | `ETHUSDT` | 0.01 | 0.50 |
+| `SOL` | `SOLUSDT` | 0.01 | 0.03 |
+| `XRP` | `XRPUSDT` | 0.0001 | 0.0003 |
+
+The payload is the same for every asset; only the prices and their scale differ. XRP
+trades around $1 and BTC around $80,000, so a model with an absolute dollar constant in
+it — a fixed spread, a fixed price step — will not carry over. `venues.*.symbol` names
+the symbol as well.
 
 Both `spot` and `futures` are present with the identical shape — `liquidations` and
 `depth_bands` appear on both, but each is only populated on the venue it applies to, so
@@ -88,20 +102,21 @@ production disagree.
 ## Field reference
 
 - **`prompt.trigger`** — why this call fired. `kind` is one of:
-  - **`time`** — the clock, on a **20-second wall-clock boundary** (`:00`, `:20`,
-    `:40`). `current_time_ms` is that boundary; `venue` is `None`.
-  - **`event`** — a trade that moved the price more than one tick, fired at the
-    instant of the move. `current_time_ms` is that trade's local receive time.
+  - **`time`** — the clock, on the asset's **20-second slot**: BTC at `:00`, `:20`,
+    `:40`, ETH 5 s later, SOL 10 s later, XRP 15 s later. `current_time_ms` is that
+    slot; `venue` is `None`.
+  - **`event`** — a trade more than one tick from the price of the last move, fired at
+    the instant of the move. `current_time_ms` is that trade's local receive time.
   - **`event_delayed`** — the same move, but asked after `uniform(0, 500 ms)`.
     `current_time_ms` is still the move's own receive time, so only the staleness
     of your inputs changes — not the question or the horizon it is scored over.
 
-  **At most one event prompt per 20-second interval**, and only from a 5-second
-  window opening 10 s after each boundary. The **first** qualifying move in that
-  window wins; every other move is ignored, including any that follow it inside
-  the window. If none qualifies, the window is abandoned and only the `time`
-  prompt fires for that interval. This is why qualifying moves vastly outnumber
-  event prompts — see [the FAQ](FAQ.md#how-often-am-i-called-and-why).
+  **At most one event prompt per asset per 20 seconds**, and only from a 4-second
+  window opening 10.25 s after the asset's slot. Each qualifying move in the window
+  is taken with a **50% chance**, else skipped for the next, until one is taken; if
+  none is, the window is abandoned and only the `time` prompt fires for that
+  interval. This is why qualifying moves vastly outnumber event prompts — see
+  [the FAQ](FAQ.md#how-often-am-i-called-and-why).
 
   Of the move-triggered prompts, a coin flip sends about half down each branch,
   so **half arrive with zero delay** (`event`) and half delayed
@@ -152,10 +167,12 @@ production disagree.
 - **`depth_bands`** — a coarse, wide view of the spot order book: resting size folded into
   fixed-width price bands. `bids[i]` is the size resting in
   `[anchor_price - (i+1)*bucket_usd, anchor_price - i*bucket_usd)`, and `asks[i]` mirrors
-  it above. Currently 100 bands of $10 per side, so about $1,000 of reach.
+  it above. Currently 100 bands per side; on BTC they are $10 wide, so about $1,000 of
+  reach, and on the other assets each band is about the same share of a typical
+  10-second move (see [Assets](#assets)).
 
   This complements `depth_start`/`depth_latest` rather than replacing them. Those 20
-  levels are precise and live but span only around $20 in total, while most 10-second
+  levels are precise and live but span only around $20 in total on BTC, while most 10-second
   moves travel further than that — so the snapshot tells you the terrain underfoot and
   the bands tell you what is further out.
 
@@ -213,16 +230,21 @@ venue while its candle history is short. Spot candles are always complete.
 
 ## Sample payloads
 
-Two real captures, both produced by the same code path that builds live prompts — so
-neither can drift from the contract the way a hand-written fixture would.
+Real captures, all produced by the same code path that builds live prompts — so none
+can drift from the contract the way a hand-written fixture would.
 
 | file | size | what it is for |
 |---|---|---|
 | [`samples/sample_payload.json`](samples/sample_payload.json) | 200 KB | shape. Every field present, long arrays truncated, readable by eye. |
-| [`samples/real_payload.json.gz`](samples/real_payload.json.gz) | 0.7 MB gz | statistics. Full production sizes — 3,600 candles, thousands of book-ticker rows. |
+| [`samples/real_payload.json.gz`](samples/real_payload.json.gz) | 0.7 MB gz | statistics. Full production sizes — 3,600 candles, thousands of book-ticker rows. BTC. |
+| [`samples/real_payload_ETH.json.gz`](samples/real_payload_ETH.json.gz) | 1.0 MB gz | the same for ETH. |
+| [`samples/real_payload_SOL.json.gz`](samples/real_payload_SOL.json.gz) | 0.4 MB gz | the same for SOL. |
+| [`samples/real_payload_XRP.json.gz`](samples/real_payload_XRP.json.gz) | 0.4 MB gz | the same for XRP. |
 
 Start with the small one, then run against the real one before you submit: that is where a
-model that looks fast on the sample discovers it scales with row count.
+model that looks fast on the sample discovers it scales with row count. Run the ETH, SOL
+and XRP captures too if you compete on those assets: their prices are on a different
+scale, which is where a hard-coded dollar constant shows up.
 
 **Validate your model against them** with
 [`client/validate.py`](client/validate.py) — it calls your entrypoint the way the

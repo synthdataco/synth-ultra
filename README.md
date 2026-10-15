@@ -1,8 +1,9 @@
 # Synth Ultra
 
 An ultra-low-latency forecasting competition: predict the distribution of the
-**BTC price 10 seconds ahead**, from live Binance order-book and trade data, with
-a model that runs in **under 5 ms**.
+**BTC, ETH, SOL and XRP prices 10 seconds ahead**, from live Binance order-book and
+trade data, with a model that runs in **under 5 ms**. Each asset is its own
+competition.
 
 Synth builds predictive models and applies them to financial markets. Synth Ultra
 targets the shortest horizons — short-term dynamics such as autocorrelation and
@@ -14,7 +15,8 @@ trading systems.
 
 A model that:
 
-- predicts **100 percentiles** of the BTC price **10 seconds** into the future,
+- predicts **100 percentiles** of the asset's price **10 seconds** into the future
+  (the asset is named in each prompt; one model answers every asset it handles),
 - runs in **under 5 ms** per prediction (strictly enforced), and
 - meets the technical specification so it runs directly in Synth's evaluation
   environment.
@@ -24,8 +26,8 @@ participants.
 
 ## Data available to the model
 
-Each prediction, the model receives — for Binance **spot** and **USDT-M
-futures** (BTCUSDT):
+Each prediction, the model receives — for the prompted asset, on Binance **spot** and
+**USDT-M futures** (`BTCUSDT`, `ETHUSDT`, `SOLUSDT` or `XRPUSDT`):
 
 - the last **1 hour** of 1-second candles (OHLCV),
 - an order-book snapshot to a set depth from ~**60 s** prior, every subsequent
@@ -33,8 +35,9 @@ futures** (BTCUSDT):
 - **60 s** of aggregate trades, and
 - **60 s** of book-ticker updates (best bid/ask price and size),
 - **1 h** of futures liquidations (forced position closures), and
-- a coarse **$10-band view of the whole spot book** (~$1,000 of reach), refreshed every
-  ~30 s alongside the live 20-level snapshot.
+- a coarse **banded view of the whole spot book** (100 bands per side; $10 wide on BTC,
+  sized to each asset's volatility on the others), refreshed every ~30 s alongside the
+  live 20-level snapshot.
 
 Full schema: [`input.md`](input.md). Full competition spec:
 [`SPECIFICATION.md`](SPECIFICATION.md). Answers to the questions participants
@@ -43,7 +46,10 @@ actually ask — the latency budget, call rate, the compute environment:
 
 ## Rewards & participation
 
-- **25%** of total subnet miner rewards are allocated to Synth Ultra.
+- **25%** of total subnet miner rewards are allocated to Synth Ultra, split equally
+  between its assets: each asset is a separate competition with its own ranking.
+- **Rollout:** ETH, SOL and XRP are prompted from [DATE 1] (a shadow period: scored and
+  shown, not yet paid) and paid from [DATE 2]. Until then BTC takes the whole 25%.
 - Limited to **30 participants**.
 - **To join, ask us to register your hotkey** — see [`ONBOARDING.md`](ONBOARDING.md). You send a
   hotkey and a handle, we create your registry repo and push key, and you collect the key
