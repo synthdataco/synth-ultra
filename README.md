@@ -48,8 +48,8 @@ actually ask — the latency budget, call rate, the compute environment:
 
 - **25%** of total subnet miner rewards are allocated to Synth Ultra, split equally
   between its assets: each asset is a separate competition with its own ranking.
-- **Rollout:** ETH, SOL and XRP are prompted from [DATE 1] (a shadow period: scored and
-  shown, not yet paid) and paid from [DATE 2]. Until then BTC takes the whole 25%.
+- **Rollout:** ETH, SOL and XRP are prompted from 2026-10-16 (a shadow period: scored and
+  shown, not yet paid) and paid from 2026-10-20. Until then BTC takes the whole 25%.
 - Limited to **30 participants**.
 - **To join, ask us to register your hotkey** — see [`ONBOARDING.md`](ONBOARDING.md). You send a
   hotkey and a handle, we create your registry repo and push key, and you collect the key
