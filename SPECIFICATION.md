@@ -1,6 +1,6 @@
 # Synth Ultra — competition specification
 
-Each prediction, a model outputs the distribution of the BTC price 10 seconds
+Each prediction, a model outputs the distribution of an asset's price 10 seconds
 ahead and is scored on live market data. This document defines the task, the
 runtime environment, the scoring, and the submission format.
 
@@ -13,8 +13,10 @@ hard latency budget so they can feed directly into live trading systems.
 
 ## The task
 
-For asset **BTC**, predict the **100 percentiles** of the price **10 seconds**
-after the prediction time (`current_time_ms + 10_000`).
+For the asset named in `prompt.asset` — **BTC**, **ETH**, **SOL** or **XRP** — predict
+the **100 percentiles** of its price **10 seconds** after the prediction time
+(`current_time_ms + 10_000`). Every model receives every asset's prompts through the same
+interface; the payload has the same shape for each, so branch on `prompt.asset`.
 
 The output is a length-100 array on the centered quantile grid
 `q_i = (2i − 1) / 200`, `i = 1..100` (0.005, 0.015, …, 0.995). It must be:
@@ -52,7 +54,8 @@ The model runs inside Synth's evaluation environment, under these constraints:
 ## Input data
 
 Each prediction, the model receives a snapshot of Binance **spot** and **USDT-M
-futures** data for BTCUSDT: 1 hour of 1-second candles, an order-book snapshot to
+futures** data for the prompted asset's symbol (`BTCUSDT`, `ETHUSDT`, `SOLUSDT`,
+`XRPUSDT`): 1 hour of 1-second candles, an order-book snapshot to
 a set depth from ~60 s prior plus every subsequent update and the latest
 snapshot, and 60 s of aggregate trades and book-ticker updates. Full schema,
 field reference, and timestamp semantics: [`input.md`](input.md).
@@ -82,6 +85,12 @@ around that instant.
 
 Models are evaluated **continuously on live market data**; scores accumulate over
 time and are visible to all participants. Lower average CRPS ranks higher.
+
+**Each asset is a separate competition.** Prompts are scored against that asset's own
+realized price, averaged over that asset's prompts, and ranked within that asset; the
+Synth Ultra reward is split equally between the assets. CRPS is in price units, so
+scores are never compared across assets. A model that never answers an asset is not in
+that asset's competition: it is neither ranked nor penalised there.
 
 ## Submission
 

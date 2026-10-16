@@ -179,47 +179,62 @@ model is averaged over the *same* prompts. Output that fails validation — wron
 shape or dtype, non-finite, non-positive, or not non-decreasing — is treated the
 same as a non-answer.
 
+This applies within each asset. A model that has not given a single valid answer for an
+asset in the scoring window is **not in that asset's competition** at all: not charged,
+not ranked, not paid for it. So you can compete on BTC alone, or on any subset of the
+assets.
+
 ## How often am I called, and why
 
 **How many prompts per hour, and what triggers them?**
 
-- Roughly **4.5–5 calls per minute** — about **270–300 per hour**. Every
-  participant receives every prompt; there is no per-model sampling.
-- Mix, on a recent sample: about **two thirds clock-driven** (`time`) and **one
-  third triggered by a real price move** (`event` / `event_delayed`).
+- Per asset, **3 clock prompts per minute** plus up to 3 move-triggered ones: about
+  **4.5–6 calls per minute**, fewer on a quiet market. With all four assets prompted,
+  roughly four times that. Every participant receives every prompt; there is no
+  per-model sampling.
+- Mix: between about **a third and a half triggered by a real price move**
+  (`event` / `event_delayed`), the rest clock-driven (`time`), depending on how busy
+  the market is.
 
 **What is the clock interval, and is it aligned?**
 
-**20 seconds, aligned to wall-clock multiples** — `:00`, `:20`, `:40`. A `time` prompt
-fires on each boundary, and `current_time_ms` is that boundary.
+**20 seconds per asset, aligned to wall-clock multiples and staggered between assets**
+so their prompts never arrive together: BTC at `:00`, `:20`, `:40`; ETH 5 s later
+(`:05`, `:25`, `:45`); SOL 10 s later; XRP 15 s later. A `time` prompt fires on each of
+the asset's slots, and `current_time_ms` is that slot.
 
 **I see far more qualifying price moves than event prompts. How is one chosen?**
 
-Neither a minimum gap nor random sampling — a **window**, and the **first** qualifying
-move inside it wins:
+A **window**, and inside it a coin per move. For BTC (the other assets are the same,
+shifted by their offset):
 
 ```
-:00   time prompt fires
-:10   event window OPENS, 10 s after the boundary
-      · any move already queued from before the window is discarded as stale
-      · the first qualifying move from here on fires the event prompt
-:15   window CLOSES if nothing qualified — 5 s maximum wait
-:20   next boundary, and it starts again
+:00      time prompt fires
+:10.25   event window OPENS, 10.25 s after the slot
+         · any move received before the window opened is discarded as stale
+         · each qualifying move from here on is taken with a 50% chance,
+           else skipped for the next one
+:14.25   window CLOSES if no move was taken — 4 s maximum wait
+:20      next slot, and it starts again
 ```
 
-So at most **one** event prompt per 20-second interval, and only from a 5-second slice of
-it. Every other qualifying move is ignored: those outside the window entirely, and any
-that arrive after the first one within it. That is why qualifying moves vastly outnumber
-event prompts.
+So at most **one** event prompt per asset per 20 seconds, and only from a 4-second slice
+of it. Moves outside the window, and moves after the one taken, are ignored. That is why
+qualifying moves vastly outnumber event prompts. The coin keeps the event prompt from
+always landing on the first move after the window opens.
 
-If no move qualifies inside those 5 seconds the window is **abandoned** and only the clock
-prompt fires for that interval — which is why the mix is about ⅔ time and ⅓ event rather
-than an even split. Quiet markets produce proportionally fewer event prompts.
+If no move is taken inside those 4 seconds the window is **abandoned** and only the clock
+prompt fires for that interval. Quiet markets produce proportionally fewer event prompts.
 
-**What counts as a qualifying move?** A trade group that shifts the price by **more than
-one tick** against the previous group. Trades sharing an exchange timestamp are grouped
-first, so one order sweeping several levels counts once, as a single move rather than
-several one-tick steps.
+The window ends early enough that even a delayed event (below) is asked before the next
+asset's slot, so prompts for different assets never queue together.
+
+**What counts as a qualifying move?** A trade group whose price is **more than one tick**
+from the price of the **last move** (so two ticks or more). Trades sharing an exchange
+timestamp are grouped first, so one order sweeping several levels counts once, as a
+single move. Measuring from the last move rather than from the previous trade means bid-ask
+bounce never qualifies, while a price walking away one tick at a time does once it is two
+ticks out — which matters on SOL and XRP, whose ticks are large relative to their price.
 
 **Is the delay on `event_delayed` uniform between 0 and 500 ms?**
 
@@ -285,10 +300,10 @@ get an illegal-instruction crash on the first call rather than a slow model.
 
 **Is there a sample payload?**
 
-Yes — two, in [`samples/`](samples/). A 200 KB one for checking shape, and a full-size
-real capture (0.7 MB gzipped) for checking that your model still fits the budget at
-production row counts. Both are real captures from the same code path that builds live
-prompts.
+Yes, in [`samples/`](samples/). A 200 KB one for checking shape, and full-size real
+captures for each asset (BTC, ETH, SOL, XRP; 0.4–1 MB gzipped) for checking that your
+model still fits the budget at production row counts and handles every price scale. All
+are real captures from the same code path that builds live prompts.
 
 Run your model against them with [`client/validate.py`](client/validate.py), which calls
 your entrypoint the way the runtime does and checks the response contract. See
@@ -318,7 +333,7 @@ changes over 30 seconds when measured on a fixed price frame, even while the mid
 A mid-relative view of the same book would be stale within seconds.
 
 Neither field replaces anything. `depth_start` / `depth_latest` are still live and still
-precise — they just cover about $20 either side, where the bands cover about $1,000.
+precise — on BTC they cover about $20 either side, where the bands cover about $1,000.
 
 ## Payload semantics at an event-triggered call
 
