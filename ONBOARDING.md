@@ -1,6 +1,6 @@
 # Joining Synth Ultra
 
-Four steps. Your **subnet 50 hotkey is your identity** throughout — there is no account, no
+Three steps. Your **subnet 50 hotkey is your identity** throughout — there is no account, no
 password, and no email round-trip. Everything you send is signed with that hotkey, and the
 server verifies the signature rather than trusting the request.
 
@@ -12,20 +12,33 @@ nothing to install, is `uv`.
 
 ---
 
-## 1. Ask us to register you
+## 1. Apply
 
-Send Synth your **subnet 50 hotkey**, a short handle (`[a-z0-9-]`, up to 20 characters — it
-becomes the name of your registry repo) and an email we can reach you on.
+```bash
+uv run --no-project --with "bittensor>=11,<12" python client/submit.py apply \
+  --wallet my_coldkey --hotkey my_hotkey \
+  --handle my-handle --email me@example.com --discord my-discord-name
+```
 
-Your hotkey must already hold a registered uid on subnet 50. That is what bounds
-participation, so register it first if you have not.
+**All three are required.** `--handle` derives the name of your registry repo: it is lowercased,
+anything outside `[a-z0-9-]` becomes a dash, and it is capped at 20 characters — so the repo you
+end up with is `vhft-<handle>`, and if that name is already taken a `-2` is appended. `--email`
+and `--discord` are how we reach you about your submission.
 
-We create your registry repo, a push service account and a push key for you. A limited number
-of participants are set up per day, in the order requests arrive.
+One operator entering under several hotkeys is against the rules and is what we look for, so an
+application has to say who is behind it. See *Can I enter the same model twice?* in [`FAQ.md`](FAQ.md).
 
-You will hear from us when it is ready — then come back for step 2.
+The request is signed with your hotkey and recorded directly. Applications from hotkeys with
+no registered uid on subnet 50 are refused.
+
+A person reviews each application, so approval is not instant, and a limited number of
+participants are set up per day in the order applications arrive. **Applications are capped
+per hotkey** — apply once and poll step 2 rather than re-sending.
 
 ## 2. Collect your push key
+
+This is also how you check where your application got to: it reports `pending_review` while
+it is with us, `provisioning` once approved, and then hands you the key.
 
 ```bash
 uv run --no-project --with "bittensor>=11,<12" python client/submit.py credentials \
