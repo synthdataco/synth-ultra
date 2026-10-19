@@ -28,8 +28,8 @@ and `--discord` are how we reach you about your submission.
 One operator entering under several hotkeys is against the rules and is what we look for, so an
 application has to say who is behind it. See *Can I enter the same model twice?* in [`FAQ.md`](FAQ.md).
 
-There is nothing to send us by hand: the request is signed with your hotkey and recorded
-directly. Applications from hotkeys with no registered uid on subnet 50 are refused.
+The request is signed with your hotkey and recorded directly. Applications from hotkeys with
+no registered uid on subnet 50 are refused.
 
 A person reviews each application, so approval is not instant, and a limited number of
 participants are set up per day in the order applications arrive. **Applications are capped

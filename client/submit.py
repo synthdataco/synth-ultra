@@ -16,8 +16,8 @@ You need `bittensor` available. The simplest way, with no install, is uv.
 
 THE ORDER, once end to end:
 
-  # 1. apply. Nothing is emailed and nobody is asked -- the request is signed with
-  #    your hotkey, which must already hold a registered uid on subnet 50. All three
+  # 1. apply. The request is signed with your hotkey, which must already hold a
+  #    registered uid on subnet 50. All three
   #    contact fields are required: --handle derives your registry repo name, and the
   #    other two are how we reach you about your submission.
   uv run --no-project --with "bittensor>=11,<12" python submit.py apply \
@@ -127,7 +127,7 @@ def cmd_apply(args, kp) -> None:
     code, resp = _request("POST", f"{args.api}/v1/onboard", body)
     print(f"-> {code} {resp}")
     if code == 202:
-        print("\nApplication recorded. Nothing else to send us — check progress with:")
+        print("\nApplication recorded. Check progress with:")
         print("  submit.py credentials --wallet <coldkey> --hotkey <hotkey>")
         print("\n  pending_review = waiting on us, provisioning = approved and being set up.")
     elif code == 403:

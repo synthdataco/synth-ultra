@@ -69,8 +69,8 @@ priming any lazy code paths) at **import / module load**, and keep
 ## Joining
 
 **How do I get in?** Run `client/submit.py apply` with your hotkey — see
-[`ONBOARDING.md`](ONBOARDING.md). Nothing is emailed and nobody is asked: the application is
-signed with your hotkey, which is your identity, so there is no form and no account. It must
+[`ONBOARDING.md`](ONBOARDING.md). The application is signed with your hotkey, which is your
+identity, so there is no form and no account. It must
 already hold a registered uid on subnet 50, which is what bounds participation. Pass a handle,
 an email and a Discord name — all three are required.
 
