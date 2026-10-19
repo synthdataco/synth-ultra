@@ -50,11 +50,10 @@ actually ask — the latency budget, call rate, the compute environment:
   between its assets: each asset is a separate competition with its own ranking.
 - **Rollout:** ETH, SOL and XRP are prompted from 2026-10-16 (a shadow period: scored and
   shown, not yet paid) and paid from 2026-10-20. Until then BTC takes the whole 25%.
-- Limited to **30 participants**.
-- **To join, ask us to register your hotkey** — see [`ONBOARDING.md`](ONBOARDING.md). You send a
-  hotkey and a handle, we create your registry repo and push key, and you collect the key
-  yourself over a signed request — we never email you a credential.
-- Your hotkey must already hold a **registered uid on subnet 50** before we can register you.
+- **To join, apply with `client/submit.py apply`** — see [`ONBOARDING.md`](ONBOARDING.md). The
+  application is signed with your hotkey; we approve it, create your registry repo and push key,
+  and you collect the key yourself over a signed request — we never email you a credential.
+- Your hotkey must already hold a **registered uid on subnet 50** before you can apply.
 
 ## Objective
 

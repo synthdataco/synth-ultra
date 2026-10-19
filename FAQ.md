@@ -68,10 +68,10 @@ priming any lazy code paths) at **import / module load**, and keep
 
 ## Joining
 
-**How do I get in?** Ask Synth to register you — send your subnet 50 hotkey, a short handle
-and an email. See [`ONBOARDING.md`](ONBOARDING.md). Your hotkey is your identity; there is no
-form and no account. It must already hold a registered uid on subnet 50, which is what bounds
-participation.
+**How do I get in?** Run `client/submit.py apply` with your hotkey — see
+[`ONBOARDING.md`](ONBOARDING.md). Nothing is emailed and nobody is asked: the application is
+signed with your hotkey, which is your identity, so there is no form and no account. It must
+already hold a registered uid on subnet 50, which is what bounds participation.
 
 **Is registration automatic?** No. We set participants up by hand, a limited number per day,
 in the order requests arrive. Nothing is created for you until then.

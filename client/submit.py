@@ -5,6 +5,7 @@ Everything is signed with your subnet hotkey (sr25519). Your hotkey IS your iden
 there is no account, no password, and no email round-trip. Each action signs a different
 message, so a signature for one can never be replayed as another:
 
+  apply        vhft-onboard|v1|{hotkey}|{unix_ts}|{payload_hash}
   credentials  vhft-onboard-status|v1|{hotkey}|{unix_ts}
   submit       vhft-submission|v1|{hotkey}|{unix_ts}|{payload_hash}
   status       vhft-status|v1|{hotkey}|{unix_ts}
@@ -15,9 +16,15 @@ You need `bittensor` available. The simplest way, with no install, is uv.
 
 THE ORDER, once end to end:
 
-  # 1. ask Synth to register your hotkey (see ONBOARDING.md).
+  # 1. apply. Nothing is emailed and nobody is asked -- the request is signed with
+  #    your hotkey, which must already hold a registered uid on subnet 50. --handle
+  #    becomes your registry repo name; --email/--discord are optional and are only
+  #    used if we need to reach you.
+  uv run --no-project --with "bittensor>=11,<12" python submit.py apply \
+    --wallet my_coldkey --hotkey my_hotkey --handle my-handle
 
-  # 2. once we tell you that you are set up, collect your push key. This writes
+  # 2. a human approves applications, so poll until yours is through. The same command
+  #    reports pending_review, then provisioning, then hands you the push key. It writes
   #    the key to a file and prints the docker login line. You get TWO retrievals
   #    in total, so keep the file.
   uv run --no-project --with "bittensor>=11,<12" python submit.py credentials \
@@ -55,6 +62,7 @@ from bittensor import sp_core
 API_DEFAULT = "https://vhft-submit.synthdata.co"
 SUBMIT_PREFIX = "vhft-submission|v1"
 STATUS_PREFIX = "vhft-status|v1"
+ONBOARD_PREFIX = "vhft-onboard|v1"
 ONBOARD_STATUS_PREFIX = "vhft-onboard-status|v1"
 REGISTRY_HOST = "asia-northeast1-docker.pkg.dev"
 
@@ -96,6 +104,44 @@ def _request(method: str, url: str, body: dict | None = None) -> tuple[int, str]
         return e.code, e.read().decode()
 
 
+def cmd_apply(args, kp) -> None:
+    """Apply for a slot. Records your application; a human approves it."""
+    ts = int(time.time())
+    # Non-empty fields only. Both ends hash the payload with empties stripped, so an empty
+    # field would verify fine -- it is just noise on the wire and a NULL in the row.
+    payload = {
+        key: value
+        for key, value in (("handle", args.handle), ("email", args.email), ("discord", args.discord))
+        if value
+    }
+    message = f"{ONBOARD_PREFIX}|{kp.ss58_address}|{ts}|{payload_hash(payload)}"
+    body = {
+        "hotkey_ss58": kp.ss58_address,
+        "timestamp": ts,
+        "signature": "0x" + kp.sign(message.encode()).hex(),
+        "payload": payload,
+    }
+    print(f"hotkey : {kp.ss58_address}")
+    print(f"POST   : {args.api}/v1/onboard")
+    code, resp = _request("POST", f"{args.api}/v1/onboard", body)
+    print(f"-> {code} {resp}")
+    if code == 202:
+        print("\nApplication recorded. Nothing else to send us — check progress with:")
+        print("  submit.py credentials --wallet <coldkey> --hotkey <hotkey>")
+        print("\n  pending_review = waiting on us, provisioning = approved and being set up.")
+    elif code == 403:
+        print("\nYour hotkey needs a registered uid on subnet 50 before you can apply.")
+    elif code == 429:
+        # Two different limits answer 429: the per-IP throttle (wait) and the per-hotkey
+        # lifetime cap (do not bother retrying).
+        if "already applied" in resp:
+            print("\nThis hotkey has used all of its applications. Contact Synth.")
+        else:
+            print("\nRate limited. Wait a minute and try again.")
+    elif code == 503:
+        print("\nApplications are closed at the moment.")
+
+
 def cmd_credentials(args, kp) -> None:
     """Collect the push key. Limited retrievals — save the file."""
     ts = int(time.time())
@@ -107,7 +153,7 @@ def cmd_credentials(args, kp) -> None:
     if code != 200:
         print(f"-> {code} {resp}")
         if code == 404:
-            print("\nNo record for this hotkey. Ask Synth to register you first.")
+            print("\nNo application for this hotkey. Run `submit.py apply` first.")
         elif code == 410:
             print("\nYour retrievals are used up. Ask Synth to re-issue a key.")
         return
@@ -161,12 +207,16 @@ def cmd_status(args, kp) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Synth Ultra onboarding + submission client")
-    ap.add_argument("command", choices=["credentials", "submit", "status"])
+    ap.add_argument("command", choices=["apply", "credentials", "submit", "status"])
     ap.add_argument("--api", default=API_DEFAULT, help=f"submission API base (default {API_DEFAULT})")
     ap.add_argument("--wallet", help="bittensor coldkey wallet name")
     ap.add_argument("--hotkey", help="bittensor hotkey name under that wallet")
     ap.add_argument("--mnemonic", help="raw hotkey mnemonic (alternative to --wallet/--hotkey)")
     ap.add_argument("--uri", help="dev throwaway URI, e.g. //Alice (testing only)")
+    # apply
+    ap.add_argument("--handle", help="short handle [a-z0-9-], becomes your registry repo name")
+    ap.add_argument("--email", help="optional, only used if we need to reach you")
+    ap.add_argument("--discord", help="optional, only used if we need to reach you")
     # credentials
     ap.add_argument("--out", help="where to write the push key (credentials)")
     # submit
@@ -177,9 +227,9 @@ def main() -> None:
     if args.command == "submit" and not (args.image_uri and args.image_digest):
         raise SystemExit("submit requires --image-uri and --image-digest")
     kp = load_keypair(args)
-    {"credentials": cmd_credentials, "submit": cmd_submit, "status": cmd_status}[args.command](
-        args, kp
-    )
+    {"apply": cmd_apply, "credentials": cmd_credentials, "submit": cmd_submit, "status": cmd_status}[
+        args.command
+    ](args, kp)
 
 
 if __name__ == "__main__":
