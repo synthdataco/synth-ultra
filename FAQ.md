@@ -71,10 +71,18 @@ priming any lazy code paths) at **import / module load**, and keep
 **How do I get in?** Run `client/submit.py apply` with your hotkey — see
 [`ONBOARDING.md`](ONBOARDING.md). Nothing is emailed and nobody is asked: the application is
 signed with your hotkey, which is your identity, so there is no form and no account. It must
-already hold a registered uid on subnet 50, which is what bounds participation.
+already hold a registered uid on subnet 50, which is what bounds participation. Pass a handle,
+an email and a Discord name — all three are required.
 
 **Is registration automatic?** No. We set participants up by hand, a limited number per day,
 in the order requests arrive. Nothing is created for you until then.
+
+**Can I enter the same model twice?** No. One operator gets one slot, and a model may run
+under one hotkey only. We compare the code inside submitted images and the live forecasts the
+running miners produce, so near-identical entries are found whether or not the images differ —
+renaming files, recompiling, or changing a comment does not make two entries distinct. Entries
+found to be duplicates are removed from the competition. A person reviews every case before
+anything happens, and this is why an application has to name who is behind it.
 
 **Where does my registry repo come from?** It is created for you on approval, along with a
 push service account and a key you collect yourself. That key grants push to your own repo
@@ -111,7 +119,8 @@ a new version go live?**
 - each new submission must be **strictly newer** (by timestamp) than your previous
   one;
 - submit **by digest** (`sha256:` + 64 hex characters), with a non-empty image
-  reference and `version ≥ 1`.
+  reference and `version ≥ 1`;
+- **one model, one operator** — see *Can I enter the same model twice?* below.
 
 There is no cap on how many versions you ship over time — you are bounded only by
 the 4-hour cadence and the strictly-newer rule.

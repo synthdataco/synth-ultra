@@ -17,11 +17,12 @@ You need `bittensor` available. The simplest way, with no install, is uv.
 THE ORDER, once end to end:
 
   # 1. apply. Nothing is emailed and nobody is asked -- the request is signed with
-  #    your hotkey, which must already hold a registered uid on subnet 50. --handle
-  #    becomes your registry repo name; --email/--discord are optional and are only
-  #    used if we need to reach you.
+  #    your hotkey, which must already hold a registered uid on subnet 50. All three
+  #    contact fields are required: --handle derives your registry repo name, and the
+  #    other two are how we reach you about your submission.
   uv run --no-project --with "bittensor>=11,<12" python submit.py apply \
-    --wallet my_coldkey --hotkey my_hotkey --handle my-handle
+    --wallet my_coldkey --hotkey my_hotkey \
+    --handle my-handle --email me@example.com --discord my-discord-name
 
   # 2. a human approves applications, so poll until yours is through. The same command
   #    reports pending_review, then provisioning, then hands you the push key. It writes
@@ -214,9 +215,9 @@ def main() -> None:
     ap.add_argument("--mnemonic", help="raw hotkey mnemonic (alternative to --wallet/--hotkey)")
     ap.add_argument("--uri", help="dev throwaway URI, e.g. //Alice (testing only)")
     # apply
-    ap.add_argument("--handle", help="short handle [a-z0-9-], becomes your registry repo name")
-    ap.add_argument("--email", help="optional, only used if we need to reach you")
-    ap.add_argument("--discord", help="optional, only used if we need to reach you")
+    ap.add_argument("--handle", help="required: short handle [a-z0-9-], derives your registry repo name")
+    ap.add_argument("--email", help="required: an address we can reach you on")
+    ap.add_argument("--discord", help="required: your Discord name")
     # credentials
     ap.add_argument("--out", help="where to write the push key (credentials)")
     # submit
@@ -226,6 +227,8 @@ def main() -> None:
     args = ap.parse_args()
     if args.command == "submit" and not (args.image_uri and args.image_digest):
         raise SystemExit("submit requires --image-uri and --image-digest")
+    if args.command == "apply" and not (args.handle and args.email and args.discord):
+        raise SystemExit("apply requires --handle, --email and --discord")
     kp = load_keypair(args)
     {"apply": cmd_apply, "credentials": cmd_credentials, "submit": cmd_submit, "status": cmd_status}[
         args.command

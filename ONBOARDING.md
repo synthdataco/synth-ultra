@@ -16,11 +16,17 @@ nothing to install, is `uv`.
 
 ```bash
 uv run --no-project --with "bittensor>=11,<12" python client/submit.py apply \
-  --wallet my_coldkey --hotkey my_hotkey --handle my-handle
+  --wallet my_coldkey --hotkey my_hotkey \
+  --handle my-handle --email me@example.com --discord my-discord-name
 ```
 
-`--handle` (`[a-z0-9-]`, up to 20 characters) becomes the name of your registry repo.
-`--email` and `--discord` are optional, and are only used if we need to reach you.
+**All three are required.** `--handle` derives the name of your registry repo: it is lowercased,
+anything outside `[a-z0-9-]` becomes a dash, and it is capped at 20 characters — so the repo you
+end up with is `vhft-<handle>`, and if that name is already taken a `-2` is appended. `--email`
+and `--discord` are how we reach you about your submission.
+
+One operator entering under several hotkeys is against the rules and is what we look for, so an
+application has to say who is behind it. See *Can I enter the same model twice?* in [`FAQ.md`](FAQ.md).
 
 There is nothing to send us by hand: the request is signed with your hotkey and recorded
 directly. Applications from hotkeys with no registered uid on subnet 50 are refused.
