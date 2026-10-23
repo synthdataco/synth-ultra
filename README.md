@@ -37,7 +37,9 @@ Each prediction, the model receives — for the prompted asset, on Binance **spo
 - **1 h** of futures liquidations (forced position closures), and
 - a coarse **banded view of the whole spot book** (100 bands per side; $10 wide on BTC,
   sized to each asset's volatility on the others), refreshed every ~30 s alongside the
-  live 20-level snapshot.
+  live 20-level snapshot, and
+- **60 s of Bybit perpetual-futures trades** for the same symbol — as received in Tokyo, so
+  typically ~40 ms behind Bybit's own clock.
 
 Full schema: [`input.md`](input.md). Full competition spec:
 [`SPECIFICATION.md`](SPECIFICATION.md). Answers to the questions participants
