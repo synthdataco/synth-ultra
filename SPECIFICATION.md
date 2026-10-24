@@ -57,7 +57,8 @@ Each prediction, the model receives a snapshot of Binance **spot** and **USDT-M
 futures** data for the prompted asset's symbol (`BTCUSDT`, `ETHUSDT`, `SOLUSDT`,
 `XRPUSDT`): 1 hour of 1-second candles, an order-book snapshot to
 a set depth from ~60 s prior plus every subsequent update and the latest
-snapshot, and 60 s of aggregate trades and book-ticker updates. Full schema,
+snapshot, and 60 s of aggregate trades and book-ticker updates — plus 60 s of Bybit
+perpetual-futures trades for the same symbol, as received in Tokyo. Full schema,
 field reference, and timestamp semantics: [`input.md`](input.md).
 
 ## Scoring

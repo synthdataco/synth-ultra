@@ -1,14 +1,14 @@
 # Synth Ultra — model input
 
 What your model receives on each prediction: a snapshot of Binance market data
-for the prompted asset, as a plain dict of NumPy arrays. Read this alongside
+for the prompted asset, plus Bybit's perpetual-futures trades, as a plain dict of NumPy arrays. Read this alongside
 [`SPECIFICATION.md`](SPECIFICATION.md) (the task and how the output is scored).
 
 ## Payload shape
 
 ```
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "prompt": {
     "asset": "BTC" | "ETH" | "SOL" | "XRP",
     "horizon_seconds": 10,
@@ -17,7 +17,8 @@ for the prompted asset, as a plain dict of NumPy arrays. Read this alongside
     "current_time_ms": int,              # the "now" the forecast is anchored to (ms)
     "trigger": {"kind": "time"|"event"|"event_delayed", "venue": str|None}
   },
-  "venues": { "spot": VenueData, "futures": VenueData }
+  "venues": { "spot": VenueData, "futures": VenueData },
+  "other_venues": { "bybit_futures": TradesOnly }
 }
 
 VenueData = {
@@ -36,6 +37,12 @@ VenueData = {
   "depth_bands":  {"anchor_price","bucket_usd": f64, "bids","asks": f64 (bands,), "recv_ts_ms": int},
                   # spot only — present but empty on futures; refreshed every ~30 s
   "last_event_times": {stream_name: recv_ts_ms}
+}
+
+TradesOnly = {                           # another exchange: its trades and nothing else
+  "symbol": "BTCUSDT",
+  "trades": {"ts_ms","event_ts_ms","recv_ts_ms": i64 (m,), "price","qty": f64 (m,), "buyer_is_maker": bool_ (m,)},
+  "last_event_times": {"trade": recv_ts_ms}   # {} before the first trade
 }
 ```
 
@@ -60,13 +67,14 @@ snapshots carry a set number of levels per side (20 in the initial competition).
 
 ## Schema versions
 
-`schema_version` identifies the payload contract. It is currently **5**.
+`schema_version` identifies the payload contract. It is currently **6**.
 
-**Treat it as a minimum, not an exact match.** Both bumps so far added keys alongside the
+**Treat it as a minimum, not an exact match.** Every bump so far added keys alongside the
 existing ones — nothing was removed or renamed:
 
 | version | added | date |
 |---|---|---|
+| 6 | `other_venues.bybit_futures` (Bybit perp trades) | 2026-10-23 |
 | 5 | `venues.*.depth_bands` | 2026-09-25 |
 | 4 | `venues.*.liquidations` | 2026-09-25 |
 | 3 | the baseline documented here | — |
@@ -77,7 +85,7 @@ stays up and healthy, that failure looks like a scoring problem rather than a re
 If you check the version at all, prefer:
 
 ```python
-if payload["schema_version"] < 5:        # the version you were built against
+if payload["schema_version"] < 6:        # the version you were built against
     raise ValueError("payload older than this model supports")
 ```
 
@@ -197,6 +205,22 @@ production disagree.
 - **`last_event_times`** — the most recent `recv_ts_ms` per stream (staleness
   check).
 
+- **`other_venues.bybit_futures`** — Bybit's USDT perpetual trades for the same symbol,
+  over the same **60 s** as `venues.*.trades`, with the **same columns and meaning**:
+  `ts_ms` = Bybit's trade time, `event_ts_ms` = when Bybit sent it, `recv_ts_ms` = when we
+  received it, `buyer_is_maker` = the taker sold. Bybit sends every trade rather than
+  aggregating them like Binance's `aggTrade`, so expect more rows per second.
+  - It is **not under `venues`**: it has no order book, depth or candles. Read it by name;
+    code that loops over `venues` is unaffected.
+  - It is **always present, possibly empty** — zero-length arrays, and `last_event_times`
+    `{}` or old, if Bybit's feed is down or has just reconnected. Never assume rows.
+  - **These are the trades our Tokyo server had received at trigger time.** Bybit's matching
+    engine is far from Tokyo: trades typically arrive **~40 ms** after their `ts_ms`, and
+    Bybit sends in bursts, so about 1 in 100 arrives **0.3–0.5 s** late (measured
+    2026-10-22). The newest Bybit trades may therefore be missing at trigger time. If you
+    train on Bybit's own trade history, allow for this; `recv_ts_ms − ts_ms` shows it per
+    trade.
+
 ## Timestamps
 
 The canonical clock is **`recv_ts_ms`** — the local wall-clock time (ms) each
@@ -211,6 +235,13 @@ aligning to Binance's public/historical data, not for cross-stream ordering:
 - **trades**: `ts_ms` = `T` (trade/execution time), `event_ts_ms` = `E` (event/push time).
 - **depth diffs**: `event_ts_ms` = `E` (both venues), `transaction_ts_ms` = `T` (futures).
 - **futures book-ticker / depth snapshots**: `event_ts_ms` = `E`, `transaction_ts_ms` = `T`; **spot book-ticker has neither**.
+- **Bybit trades**: `ts_ms` = Bybit's `T`, `event_ts_ms` = the message's `ts`. Our `recv_ts_ms`
+  orders them with the Binance streams.
+
+How far `recv_ts_ms` trails the exchange's own time, typically (and for 1 trade in 100), measured
+on 2026-10-22: Binance spot **4–22 ms** (75–306 ms); Binance futures **11–24 ms** on BTC/ETH and
+**~150 ms** on SOL/XRP, because Binance itself holds futures trades up to 150 ms (158–172 ms);
+Bybit perps **~40 ms** (0.2–0.3 s).
 
 ## Candle completeness
 
@@ -231,15 +262,16 @@ venue while its candle history is short. Spot candles are always complete.
 ## Sample payloads
 
 Real captures, all produced by the same code path that builds live prompts — so none
-can drift from the contract the way a hand-written fixture would.
+can drift from the contract the way a hand-written fixture would. All five are schema 6,
+rebuilt from the 2026-10-23 recordings with the Bybit trades in `other_venues.bybit_futures`.
 
 | file | size | what it is for |
 |---|---|---|
-| [`samples/sample_payload.json`](samples/sample_payload.json) | 200 KB | shape. Every field present, long arrays truncated, readable by eye. |
-| [`samples/real_payload.json.gz`](samples/real_payload.json.gz) | 0.7 MB gz | statistics. Full production sizes — 3,600 candles, thousands of book-ticker rows. BTC. |
-| [`samples/real_payload_ETH.json.gz`](samples/real_payload_ETH.json.gz) | 1.0 MB gz | the same for ETH. |
-| [`samples/real_payload_SOL.json.gz`](samples/real_payload_SOL.json.gz) | 0.4 MB gz | the same for SOL. |
-| [`samples/real_payload_XRP.json.gz`](samples/real_payload_XRP.json.gz) | 0.4 MB gz | the same for XRP. |
+| [`samples/sample_payload.json`](samples/sample_payload.json) | 160 KB | shape. Every field present, long arrays truncated, readable by eye. |
+| [`samples/real_payload.json.gz`](samples/real_payload.json.gz) | 0.4 MB gz | statistics. Full production sizes — 3,600 candles, thousands of book-ticker rows. BTC. |
+| [`samples/real_payload_ETH.json.gz`](samples/real_payload_ETH.json.gz) | 0.5 MB gz | the same for ETH. |
+| [`samples/real_payload_SOL.json.gz`](samples/real_payload_SOL.json.gz) | 0.2 MB gz | the same for SOL. |
+| [`samples/real_payload_XRP.json.gz`](samples/real_payload_XRP.json.gz) | 0.2 MB gz | the same for XRP. |
 
 Start with the small one, then run against the real one before you submit: that is where a
 model that looks fast on the sample discovers it scales with row count. Run the ETH, SOL
