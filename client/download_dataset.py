@@ -15,7 +15,7 @@ right away, from that one request.
   # which days are available (no signature needed):
   uv run --no-project --with "bittensor>=11,<12" python download_dataset.py --list
 
-  # the newest day, every asset, into ./prompt-dataset/<day>/:
+  # the newest day, every asset, into ./prompt-dataset/<day>/<build>/:
   uv run --no-project --with "bittensor>=11,<12" python download_dataset.py \\
     --wallet my_coldkey --hotkey my_hotkey
 
@@ -23,7 +23,8 @@ right away, from that one request.
   uv run --no-project --with "bittensor>=11,<12" python download_dataset.py \\
     --wallet my_coldkey --hotkey my_hotkey --day 2026-10-29 --assets BTC,ETH
 
-Files, under <out>/<day>/:
+Files, under <out>/<day>/<build>/ — a day can be rebuilt, and each build keeps its own folder, so
+files of two builds never mix (a build's files never change, so re-downloading one is safe):
 
   <ASSET>/prompts.jsonl.gz     one line per prompt: kind, times, the realized price, the field's scores
   <ASSET>/payloads.jsonl.gz    the payload of each prompt, exactly as miners received it
@@ -91,7 +92,7 @@ def _download(url: str, path: pathlib.Path) -> int:
 
 
 def _asset_of(rel: str) -> str:
-    """The asset a file is for: `<day>/BTC/prompts.jsonl.gz` and `<day>/own/BTC.jsonl.gz` -> BTC."""
+    """The asset a file is for: `.../BTC/prompts.jsonl.gz` and `.../own/BTC.jsonl.gz` -> BTC."""
     parts = pathlib.PurePosixPath(rel).parts
     return parts[-1].split(".")[0] if parts[-2] == "own" else parts[-2]
 
@@ -135,8 +136,9 @@ def main() -> None:
         raise SystemExit(f"-> {code} {body.get('detail', body)}")
 
     wanted = {a.strip().upper() for a in args.assets.split(",")} if args.assets else None
-    files = [(f"{day}/{name}", url) for name, url in body["shared"].items()]
-    files += [(f"{day}/own/{name}", url) for name, url in body["own"].items()]
+    build = f"{day}/{body['build']}"
+    files = [(f"{build}/{name}", url) for name, url in body["shared"].items()]
+    files += [(f"{build}/own/{name}", url) for name, url in body["own"].items()]
     if wanted is not None:
         files = [(p, u) for p, u in files if _asset_of(p) in wanted]
 
@@ -145,10 +147,16 @@ def main() -> None:
     print(f"day    : {day} (build {body['build']}); {body['downloads_left_today']} download(s) left today")
     total = 0
     for rel, url in files:
-        size = _download(url, out / rel)
+        try:
+            size = _download(url, out / rel)
+        except (OSError, urllib.error.URLError) as exc:
+            raise SystemExit(
+                f"download of {rel} failed ({exc}). The files already in {out / build} are complete; "
+                "run again to fetch the rest (it uses another of today's downloads)."
+            ) from None
         total += size
         print(f"  {rel}  {size / 1e6:.1f} MB")
-    print(f"done: {len(files)} files, {total / 1e6:.0f} MB in {out / day}")
+    print(f"done: {len(files)} files, {total / 1e6:.0f} MB in {out / build}")
     if not body["own"]:
         print("no answers of yours on that day (you were not running, or answered no prompt)")
 

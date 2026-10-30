@@ -313,6 +313,9 @@ uv run --no-project --with "bittensor>=11,<12" python client/download_dataset.py
 
 **Files**, per day:
 
+Files land in `<out>/<day>/<build>/`. A day can be rebuilt, and each build keeps its own folder, so
+files from two builds never mix.
+
 | file | who sees it | what it holds |
 |---|---|---|
 | `<ASSET>/prompts.jsonl.gz` | every participant | one line per prompt: what happened and how the field did |
