@@ -294,3 +294,78 @@ output, nothing more.
 Note both captures were taken in a live market, so they show one moment rather than a
 typical one. `futures.candles_1s.complete_history` is `False` in them, which is realistic:
 futures candles build from the trade stream and take an hour to fill.
+
+## Prompt dataset
+
+Real prompts with their outcomes, for studying where your model wins and loses. Every UTC day,
+500 prompts per asset are picked at random from that day's prompts, so `time`, `event` and
+`event_delayed` keep their natural proportions. The last **7 days** are available.
+
+**Download** with [`client/download_dataset.py`](client/download_dataset.py), signed with your
+hotkey. You must be an active participant. Each request counts as one of your **3 per UTC day** and
+returns links valid for **15 minutes**; the script downloads everything at once.
+
+```bash
+uv run --no-project --with "bittensor>=11,<12" python client/download_dataset.py --list
+uv run --no-project --with "bittensor>=11,<12" python client/download_dataset.py \
+  --wallet my_coldkey --hotkey my_hotkey --day 2026-10-29 --assets BTC,ETH
+```
+
+**Files**, per day:
+
+Files land in `<out>/<day>/<build>/`. A day can be rebuilt, and each build keeps its own folder, so
+files from two builds never mix.
+
+| file | who sees it | what it holds |
+|---|---|---|
+| `<ASSET>/prompts.jsonl.gz` | every participant | one line per prompt: what happened and how the field did |
+| `<ASSET>/payloads.jsonl.gz` | every participant | `{"prompt_id", "payload"}`: the payload of each prompt, in the format above |
+| `own/<ASSET>.jsonl.gz` | **only you** | your answer to each of those prompts |
+
+No participant is named in the shared files, and nobody can download another participant's
+answers.
+
+**`prompts.jsonl.gz`**, one line per prompt:
+
+```json
+{
+  "prompt_id": "SOL-1793214140780",
+  "asset": "SOL",
+  "kind": "event_delayed",
+  "current_time_ms": 1793214140780,
+  "target_time_ms": 1793214150780,
+  "realized_price": 102.1171,
+  "miners_asked": 29,
+  "miners_answered": 28,
+  "crps_best": 0.0193,
+  "crps_median": 0.0272,
+  "crps_p95": 0.0369,
+  "pool": {"percentiles": [101.928, 101.998, ...], "crps": 0.0277}
+}
+```
+
+- `realized_price` is the spot microprice at `target_time_ms`: what every answer to the prompt is
+  scored against.
+- `miners_answered` counts valid answers near the price; a forecast for another asset's price counts
+  as a miss.
+- `crps_best`, `crps_median`, `crps_p95`: the field's scores on this prompt, lower is better.
+  `crps_p95` is what a missed prompt is charged.
+- `pool`: every valid answer combined with equal weights, and its score. A baseline to beat.
+
+**`own/<ASSET>.jsonl.gz`**, one line per prompt you were asked:
+
+```json
+{"prompt_id": "SOL-1793214140780", "status": "CORRECT", "elapsed_ms": 0.97, "within_budget": true,
+ "percentiles": [102.003, 102.038, ...], "crps": 0.0251, "counted_as_miss": false, "charged": null}
+```
+
+A timeout or other miss reads `"crps": null, "counted_as_miss": true` and `"charged"`, the
+prompt's `crps_p95`.
+
+**How the payloads are made.** They are rebuilt from our recorded market feeds, holding exactly what
+we had received at `current_time_ms` and nothing later. A live payload's Binance data can include a
+few milliseconds received just after `current_time_ms`, so the two can differ by those messages.
+`event` and `event_delayed` prompts share one payload, as live: the delay holds back the question,
+not the data. The trigger is rebuilt as `{"kind", "venue"}` only; a live trigger's `delay_ms` is not
+included. Prompts before 2026-10-28 12:19 UTC read `event` for both kinds, because the delay was not
+recorded until then.

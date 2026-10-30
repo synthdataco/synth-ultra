@@ -56,6 +56,9 @@ actually ask — the latency budget, call rate, the compute environment:
   application is signed with your hotkey; we approve it, create your registry repo and push key,
   and you collect the key yourself over a signed request — we never email you a credential.
 - Your hotkey must already hold a **registered uid on subnet 50** before you can apply.
+- **Prompt dataset:** real prompts from each of the last 7 days, with the price that followed, how
+  the field scored, and your own answers — `client/download_dataset.py`, see
+  [`input.md`](input.md#prompt-dataset).
 
 ## Objective
 
