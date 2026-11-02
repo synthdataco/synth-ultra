@@ -302,8 +302,10 @@ Real prompts with their outcomes, for studying where your model wins and loses. 
 `event_delayed` keep their natural proportions. The last **7 days** are available.
 
 **Download** with [`client/download_dataset.py`](client/download_dataset.py), signed with your
-hotkey. You must be an active participant. Each request counts as one of your **3 per UTC day** and
-returns links valid for **15 minutes**; the script downloads everything at once.
+hotkey. You must be an active participant. Each request counts as one of your **2 per UTC day** and
+returns links valid for **15 minutes**; the script downloads everything at once. Running it again
+for a day you already have in full uses no download and transfers nothing, and after an interrupted
+run it fetches only the missing files.
 
 ```bash
 uv run --no-project --with "bittensor>=11,<12" python client/download_dataset.py --list
@@ -320,10 +322,11 @@ files from two builds never mix.
 |---|---|---|
 | `<ASSET>/prompts.jsonl.gz` | every participant | one line per prompt: what happened and how the field did |
 | `<ASSET>/payloads.jsonl.gz` | every participant | `{"prompt_id", "payload"}`: the payload of each prompt, in the format above |
-| `own/<ASSET>.jsonl.gz` | **only you** | your answer to each of those prompts |
+| `own/<hotkey>/<ASSET>.jsonl.gz` | **only you** | your answer to each of those prompts |
 
 No participant is named in the shared files, and nobody can download another participant's
-answers.
+answers. Several of your hotkeys can share one output folder: shared files are kept once per build,
+answers under each hotkey.
 
 **`prompts.jsonl.gz`**, one line per prompt:
 
@@ -352,7 +355,7 @@ answers.
   `crps_p95` is what a missed prompt is charged.
 - `pool`: every valid answer combined with equal weights, and its score. A baseline to beat.
 
-**`own/<ASSET>.jsonl.gz`**, one line per prompt you were asked:
+**`own/<hotkey>/<ASSET>.jsonl.gz`**, one line per prompt you were asked:
 
 ```json
 {"prompt_id": "SOL-1793214140780", "status": "CORRECT", "elapsed_ms": 0.97, "within_budget": true,
