@@ -8,9 +8,11 @@ The request is signed with your hotkey, like submit.py, with its own message:
 
   dataset      vhft-dataset|v1|{hotkey}|{unix_ts}|{day}
 
-You must be an active participant. Each successful request counts as one of your 3 downloads per
+You must be an active participant. Each successful request counts as one of your 2 downloads per
 UTC day, and returns links that work for 15 minutes; this script downloads everything you asked for
-right away, from that one request.
+right away, from that one request. Running it again for a day you already have in full is free: it
+sees the day's build is complete in your folder and makes no request. An interrupted run keeps the
+files it finished and fetches only the rest next time.
 
   # which days are available (no signature needed):
   uv run --no-project --with "bittensor>=11,<12" python download_dataset.py --list
@@ -97,11 +99,38 @@ def _asset_of(rel: str) -> str:
     return parts[-1].split(".")[0] if parts[-2] == "own" else parts[-2]
 
 
-def list_days(api: str) -> list[str]:
+COMPLETE_MARKER = ".complete.json"
+
+
+def list_days(api: str) -> tuple[list[str], dict[str, str]]:
+    """The available days, newest first, and each one's current build ({} from an older API)."""
     code, body = _get_json(f"{api}/v1/dataset")
     if code != 200:
         raise SystemExit(f"-> {code} {body.get('detail', body)}")
-    return body["days"]
+    return body["days"], body.get("builds", {})
+
+
+def _covered(build_dir: pathlib.Path, wanted: set[str] | None) -> bool:
+    """True when an earlier run downloaded every file of this build for the wanted assets
+    (None = every asset). A build's files never change, so that copy is still current."""
+    try:
+        done = json.loads((build_dir / COMPLETE_MARKER).read_text())
+    except (OSError, ValueError):
+        return False
+    return bool(done.get("all")) or (wanted is not None and wanted <= set(done.get("assets", [])))
+
+
+def _mark_complete(build_dir: pathlib.Path, assets: set[str], all_assets: bool) -> None:
+    marker = build_dir / COMPLETE_MARKER
+    try:
+        done = json.loads(marker.read_text())
+    except (OSError, ValueError):
+        done = {}
+    done = {
+        "all": bool(done.get("all")) or all_assets,
+        "assets": sorted(set(done.get("assets", [])) | assets),
+    }
+    marker.write_text(json.dumps(done))
 
 
 def main() -> None:
@@ -111,21 +140,30 @@ def main() -> None:
     ap.add_argument("--day", help="YYYY-MM-DD (default: the newest available)")
     ap.add_argument("--assets", help="comma-separated, e.g. BTC,ETH (default: all)")
     ap.add_argument("--out", default="prompt-dataset", help="output directory (default ./prompt-dataset)")
+    ap.add_argument("--force", action="store_true", help="download again even if this build is already complete")
     ap.add_argument("--wallet", help="bittensor coldkey wallet name")
     ap.add_argument("--hotkey", help="bittensor hotkey name under that wallet")
     ap.add_argument("--mnemonic", help="raw hotkey mnemonic (alternative to --wallet/--hotkey)")
     ap.add_argument("--uri", help="dev throwaway URI, e.g. //Alice (testing only)")
     args = ap.parse_args()
 
-    days = list_days(args.api)
+    days, builds = list_days(args.api)
     if args.list:
-        print("\n".join(days) if days else "no day is available yet")
+        print("\n".join(f"{d}  (build {builds[d]})" if d in builds else d for d in days) or "no day is available yet")
         return
     if not days:
         raise SystemExit("no day is available yet")
     day = args.day or days[0]
     if day not in days:
         raise SystemExit(f"{day} is not available; available: {', '.join(days)}")
+
+    out = pathlib.Path(args.out)
+    wanted = {a.strip().upper() for a in args.assets.split(",")} if args.assets else None
+    # Before spending a download: is the current build of that day already here in full?
+    if day in builds and not args.force and _covered(out / day / builds[day], wanted):
+        print(f"{day} (build {builds[day]}) is already complete in {out / day / builds[day]}; nothing to download")
+        print("(use --force to download it again)")
+        return
 
     kp = load_keypair(args)
     ts = int(time.time())
@@ -135,28 +173,34 @@ def main() -> None:
     if code != 200:
         raise SystemExit(f"-> {code} {body.get('detail', body)}")
 
-    wanted = {a.strip().upper() for a in args.assets.split(",")} if args.assets else None
     build = f"{day}/{body['build']}"
     files = [(f"{build}/{name}", url) for name, url in body["shared"].items()]
     files += [(f"{build}/own/{name}", url) for name, url in body["own"].items()]
     if wanted is not None:
         files = [(p, u) for p, u in files if _asset_of(p) in wanted]
 
-    out = pathlib.Path(args.out)
     print(f"hotkey : {kp.ss58_address}")
     print(f"day    : {day} (build {body['build']}); {body['downloads_left_today']} download(s) left today")
-    total = 0
+    total = skipped = 0
     for rel, url in files:
+        path = out / rel
+        # A file is only ever in place complete (written to .partial, then renamed), and a build's
+        # files never change: one already here from an interrupted run is kept, not fetched again.
+        if path.exists() and not args.force:
+            skipped += 1
+            continue
         try:
-            size = _download(url, out / rel)
+            size = _download(url, path)
         except (OSError, urllib.error.URLError) as exc:
             raise SystemExit(
                 f"download of {rel} failed ({exc}). The files already in {out / build} are complete; "
-                "run again to fetch the rest (it uses another of today's downloads)."
+                "run again to fetch the rest (it uses another of today's downloads, but skips those files)."
             ) from None
         total += size
         print(f"  {rel}  {size / 1e6:.1f} MB")
-    print(f"done: {len(files)} files, {total / 1e6:.0f} MB in {out / build}")
+    _mark_complete(out / build, {_asset_of(rel) for rel, _ in files}, wanted is None)
+    kept = f", {skipped} already here" if skipped else ""
+    print(f"done: {len(files) - skipped} files, {total / 1e6:.0f} MB in {out / build}{kept}")
     if not body["own"]:
         print("no answers of yours on that day (you were not running, or answered no prompt)")
 

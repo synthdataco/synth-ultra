@@ -302,8 +302,10 @@ Real prompts with their outcomes, for studying where your model wins and loses. 
 `event_delayed` keep their natural proportions. The last **7 days** are available.
 
 **Download** with [`client/download_dataset.py`](client/download_dataset.py), signed with your
-hotkey. You must be an active participant. Each request counts as one of your **3 per UTC day** and
-returns links valid for **15 minutes**; the script downloads everything at once.
+hotkey. You must be an active participant. Each request counts as one of your **2 per UTC day** and
+returns links valid for **15 minutes**; the script downloads everything at once. Running it again
+for a day you already have in full uses no download and transfers nothing, and after an interrupted
+run it fetches only the missing files.
 
 ```bash
 uv run --no-project --with "bittensor>=11,<12" python client/download_dataset.py --list
