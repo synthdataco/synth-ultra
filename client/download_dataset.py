@@ -30,7 +30,10 @@ files of two builds never mix (a build's files never change, so re-downloading o
 
   <ASSET>/prompts.jsonl.gz     one line per prompt: kind, times, the realized price, the field's scores
   <ASSET>/payloads.jsonl.gz    the payload of each prompt, exactly as miners received it
-  own/<ASSET>.jsonl.gz         your answers to those prompts (none if you did not answer that asset)
+  own/<hotkey>/<ASSET>.jsonl.gz   your answers to those prompts (none if you did not answer that asset)
+
+Several hotkeys can share one output folder: shared files are kept once per build, answers and the
+"already complete" record per hotkey.
 
 Identity options:
   --wallet <name> --hotkey <hk>   reads ~/.bittensor/wallets/<name>/hotkeys/<hk>
@@ -94,12 +97,15 @@ def _download(url: str, path: pathlib.Path) -> int:
 
 
 def _asset_of(rel: str) -> str:
-    """The asset a file is for: `.../BTC/prompts.jsonl.gz` and `.../own/BTC.jsonl.gz` -> BTC."""
+    """The asset a file is for: `.../BTC/prompts.jsonl.gz` and `.../own/<hotkey>/BTC.jsonl.gz` -> BTC."""
     parts = pathlib.PurePosixPath(rel).parts
-    return parts[-1].split(".")[0] if parts[-2] == "own" else parts[-2]
+    return parts[-1].split(".")[0] if "own" in parts[:-1] else parts[-2]
 
 
-COMPLETE_MARKER = ".complete.json"
+def _marker(build_dir: pathlib.Path, hotkey: str) -> pathlib.Path:
+    """Per hotkey: two hotkeys downloading into one folder share the build's shared files, never
+    each other's answers or "complete" record."""
+    return build_dir / f".complete-{hotkey}.json"
 
 
 def list_days(api: str) -> tuple[list[str], dict[str, str]]:
@@ -110,18 +116,18 @@ def list_days(api: str) -> tuple[list[str], dict[str, str]]:
     return body["days"], body.get("builds", {})
 
 
-def _covered(build_dir: pathlib.Path, wanted: set[str] | None) -> bool:
-    """True when an earlier run downloaded every file of this build for the wanted assets
-    (None = every asset). A build's files never change, so that copy is still current."""
+def _covered(build_dir: pathlib.Path, hotkey: str, wanted: set[str] | None) -> bool:
+    """True when an earlier run FOR THIS HOTKEY downloaded every file of this build for the wanted
+    assets (None = every asset). A build's files never change, so that copy is still current."""
     try:
-        done = json.loads((build_dir / COMPLETE_MARKER).read_text())
+        done = json.loads(_marker(build_dir, hotkey).read_text())
     except (OSError, ValueError):
         return False
     return bool(done.get("all")) or (wanted is not None and wanted <= set(done.get("assets", [])))
 
 
-def _mark_complete(build_dir: pathlib.Path, assets: set[str], all_assets: bool) -> None:
-    marker = build_dir / COMPLETE_MARKER
+def _mark_complete(build_dir: pathlib.Path, hotkey: str, assets: set[str], all_assets: bool) -> None:
+    marker = _marker(build_dir, hotkey)
     try:
         done = json.loads(marker.read_text())
     except (OSError, ValueError):
@@ -159,13 +165,14 @@ def main() -> None:
 
     out = pathlib.Path(args.out)
     wanted = {a.strip().upper() for a in args.assets.split(",")} if args.assets else None
-    # Before spending a download: is the current build of that day already here in full?
-    if day in builds and not args.force and _covered(out / day / builds[day], wanted):
+    kp = load_keypair(args)  # local: the cache check below needs to know WHOSE download this is
+    hotkey = kp.ss58_address
+    # Before spending a download: is the current build of that day already here in full, for this hotkey?
+    if day in builds and not args.force and _covered(out / day / builds[day], hotkey, wanted):
         print(f"{day} (build {builds[day]}) is already complete in {out / day / builds[day]}; nothing to download")
         print("(use --force to download it again)")
         return
 
-    kp = load_keypair(args)
     ts = int(time.time())
     signature = "0x" + kp.sign(f"{DATASET_PREFIX}|{kp.ss58_address}|{ts}|{day}".encode()).hex()
     query = urllib.parse.urlencode({"day": day, "timestamp": ts, "signature": signature})
@@ -175,7 +182,7 @@ def main() -> None:
 
     build = f"{day}/{body['build']}"
     files = [(f"{build}/{name}", url) for name, url in body["shared"].items()]
-    files += [(f"{build}/own/{name}", url) for name, url in body["own"].items()]
+    files += [(f"{build}/own/{hotkey}/{name}", url) for name, url in body["own"].items()]
     if wanted is not None:
         files = [(p, u) for p, u in files if _asset_of(p) in wanted]
 
@@ -198,7 +205,7 @@ def main() -> None:
             ) from None
         total += size
         print(f"  {rel}  {size / 1e6:.1f} MB")
-    _mark_complete(out / build, {_asset_of(rel) for rel, _ in files}, wanted is None)
+    _mark_complete(out / build, hotkey, {_asset_of(rel) for rel, _ in files}, wanted is None)
     kept = f", {skipped} already here" if skipped else ""
     print(f"done: {len(files) - skipped} files, {total / 1e6:.0f} MB in {out / build}{kept}")
     if not body["own"]:

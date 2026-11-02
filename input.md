@@ -322,10 +322,11 @@ files from two builds never mix.
 |---|---|---|
 | `<ASSET>/prompts.jsonl.gz` | every participant | one line per prompt: what happened and how the field did |
 | `<ASSET>/payloads.jsonl.gz` | every participant | `{"prompt_id", "payload"}`: the payload of each prompt, in the format above |
-| `own/<ASSET>.jsonl.gz` | **only you** | your answer to each of those prompts |
+| `own/<hotkey>/<ASSET>.jsonl.gz` | **only you** | your answer to each of those prompts |
 
 No participant is named in the shared files, and nobody can download another participant's
-answers.
+answers. Several of your hotkeys can share one output folder: shared files are kept once per build,
+answers under each hotkey.
 
 **`prompts.jsonl.gz`**, one line per prompt:
 
@@ -354,7 +355,7 @@ answers.
   `crps_p95` is what a missed prompt is charged.
 - `pool`: every valid answer combined with equal weights, and its score. A baseline to beat.
 
-**`own/<ASSET>.jsonl.gz`**, one line per prompt you were asked:
+**`own/<hotkey>/<ASSET>.jsonl.gz`**, one line per prompt you were asked:
 
 ```json
 {"prompt_id": "SOL-1793214140780", "status": "CORRECT", "elapsed_ms": 0.97, "within_budget": true,
