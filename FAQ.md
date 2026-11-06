@@ -374,8 +374,10 @@ what is `current_time_ms` relative to the triggering event?**
   `current_time_ms + 10 s`, and **every window in the payload is relative to
   `current_time_ms`.**
 - **The snapshot is taken as soon as the triggering trade arrives**: the payload is assembled
-  within a few milliseconds of `current_time_ms` and holds everything received up to that
-  moment, so it can include messages received in those few milliseconds. For
+  within a few milliseconds of `current_time_ms`. The Binance venues (`venues.*`) hold
+  everything received up to that moment, so they can include messages from those few
+  milliseconds; the Bybit block (`other_venues.bybit_futures`) is cut exactly at
+  `current_time_ms`. For
   `event_delayed` the snapshot is taken at the same moment and only the question is held
   back (see the delay above), so the data you see is that much older when you are asked.
 - **How far the data trails the exchange:** `recv_ts_ms` is when we received each message,
