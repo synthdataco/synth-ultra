@@ -193,6 +193,25 @@ asset in the scoring window is **not in that asset's competition** at all: not c
 not ranked, not paid for it. So you can compete on BTC alone, or on any subset of the
 assets.
 
+**How is my score built over time? Is there a decay, and does a new image start over?**
+
+- **The window:** per asset, the **last 24 hours** of prompts, rolling. Every prompt counts
+  equally: there is no decay, and `time` and event prompts weigh the same.
+- **Per prompt:** your CRPS, or the 95th-percentile charge if you missed it, minus that
+  prompt's best score. A forecast more than half the price away (another asset's price, for
+  example) counts as a miss.
+- **Your score** is the mean of those over the window. Every model in the asset is averaged
+  over the same prompts, so a miss costs you rather than shortening your series.
+- **Weights:** the scores become weights through a softmax per asset, weight ∝ exp(β × score)
+  with a negative β of its own per asset: BTC −4, ETH −86, SOL −1,460, XRP −128,000. They
+  differ because CRPS is in price units: each β is scaled to that asset's typical 10-second
+  move. Weights are recomputed about every 72 minutes and shown on `/v1/scores?asset=`.
+- **A new image does not reset anything.** The score belongs to your hotkey. After an update,
+  the old image's prompts leave the window over the next 24 hours, so your score reflects only
+  the new model one day after it goes live.
+- A prompt whose realized price cannot be determined (the spot feed was not live) is dropped
+  for everyone, not charged.
+
 ## How often am I called, and why
 
 **How many prompts per hour, and what triggers them?**
@@ -354,6 +373,15 @@ what is `current_time_ms` relative to the triggering event?**
   trade message was received; for a `time` trigger, the wall-clock boundary. Your forecast target is
   `current_time_ms + 10 s`, and **every window in the payload is relative to
   `current_time_ms`.**
+- **The snapshot is taken as soon as the triggering trade arrives**: the payload is assembled
+  within a few milliseconds of `current_time_ms` and holds everything received up to that
+  moment, so it can include messages received in those few milliseconds. For
+  `event_delayed` the snapshot is taken at the same moment and only the question is held
+  back (see the delay above), so the data you see is that much older when you are asked.
+- **How far the data trails the exchange:** `recv_ts_ms` is when we received each message,
+  and the exchange's own times ride along. Typically a few ms for Binance spot, up to ~150 ms
+  for Binance futures (Binance batches those), and ~40 ms for Bybit. See
+  [`input.md`](input.md#timestamps).
 - The **triggering trade is included** in the payload's trades array
   (`venues.spot.trades`) — it is recorded before the call is triggered, so a
   event-triggered call always contains its own trade.
