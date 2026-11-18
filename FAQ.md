@@ -394,3 +394,11 @@ what is `current_time_ms` relative to the triggering event?**
   **not guaranteed** to be present at an event-triggered call. Treat `trades` as
   the authoritative signal that the trade happened, and `book_ticker` as the
   best-bid/ask state as of the call.
+
+## The public arena
+
+**Are my forecasts shown publicly?** In part, if you are among the top 6 miners of an asset by
+reward weight. [arena.synthdata.co](https://arena.synthdata.co) replays each prompt once it is
+scored, about 30 seconds behind live: the realized price, and for each of those miners five
+quantiles of its forecast (10, 25, 50, 75 and 90 %) and its CRPS. The full 100 percentiles are
+not published.
